@@ -235,6 +235,11 @@
       <div class="hint">✎ edit fields · ✕ delete · click a colored tag to change type. Deleting a device also removes its links, subnets and clouds.</div>
     </div>
 
+    <div class="section" id="suggest-section" style="display:none">
+      <h2>Suggested connections</h2>
+      <div id="suggest"></div>
+    </div>
+
     <div class="section">
       <h2>Topology checks</h2>
       <div id="checks"></div>
@@ -620,6 +625,7 @@ function refreshUI(){
   }).join("")||`<li style="color:#9ca3af">no links yet</li>`;
   renderElements();
   renderChecks();
+  renderSuggestions();
 }
 function anchorLabel(id){ if(id&&id.startsWith("svc:")){ for(const pl of model.mgmt.planes){ const s=pl.services.find(v=>"svc:"+v.id===id); if(s) return s.label+" (VCG)"; } return "?"; } return dev(id)?.label||"?"; }
 const SVCLABEL={vcg:"VCG",vco:"VCO",syslog:"other"};
@@ -676,6 +682,25 @@ function runChecks(){
   }
   return issues;
 }
+/* ---- suggested connections for the selected device ---- */
+function renderSuggestions(){
+  const sec=document.getElementById("suggest-section"), box=document.getElementById("suggest"); if(!sec) return;
+  const ids=[...selected], sd=ids.length===1?dev(ids[0]):null;
+  if(!sd){ sec.style.display="none"; box.innerHTML=""; return; }
+  sec.style.display="";
+  const connected=new Set(); model.links.forEach(l=>{ if(l.from===sd.id) connected.add(l.to); if(l.to===sd.id) connected.add(l.from); });
+  const hubTargets=model.devices.filter(d=>d.id!==sd.id && isCore(d.kind) && !connected.has(d.id));
+  const gwTargets=[]; model.mgmt.planes.forEach(pl=>pl.services.forEach(sv=>{ if(sv.type==="vcg"){ const gid="svc:"+sv.id; if(!connected.has(gid)) gwTargets.push({id:gid,label:sv.label}); } }));
+  const kc=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":"#2b9fd8";
+  const sug=(tid,label,tag,color)=>`<li><span>${esc(label)} <span class="tag" style="background:${color}">${esc(tag)}</span></span>`
+    +`<span class="ed" style="color:#159957;font-weight:800;font-size:15px" title="Add connection" onclick="connectSuggested('${sd.id}','${tid}')">＋</span></li>`;
+  let h=`<div class="hint" style="margin-top:0">From <b>${esc(sd.label)}</b> — click ＋ to connect.</div>`;
+  if(hubTargets.length) h+=`<div class="grp">Hubs / clusters</div><ul class="links">${hubTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
+  if(gwTargets.length) h+=`<div class="grp">Gateways</div><ul class="links">${gwTargets.map(g=>sug(g.id,g.label,"VCG","#2b9fd8")).join("")}</ul>`;
+  if(!hubTargets.length && !gwTargets.length) h+=`<div class="muted">Already connected to every hub, cluster and gateway.</div>`;
+  box.innerHTML=h;
+}
+function connectSuggested(a,b){ pushUndo(); model.links.push({id:uid("l"),from:a,to:b,transport:"sdwan"}); render(); }
 function renderChecks(){ const el=document.getElementById("checks"); if(!el) return;
   const issues=runChecks();
   el.innerHTML = issues.length
