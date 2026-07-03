@@ -196,7 +196,7 @@ let model = referenceModel();
 const dev = id => model.devices.find(d=>d.id===id);
 const isCore = k => k==="hub" || k==="cluster";       // "core" nodes sit in the top tier
 const isSSE = k => k==="zscaler" || k==="prisma" || k==="netskope";   // SASE/SSE services
-const LEAF = new Set(["spoke","firewall","vwan","zscaler","prisma","netskope"]);
+const LEAF = new Set(["spoke","firewall","vwan","zscaler","prisma","netskope","internet"]);
 const hubs = () => model.devices.filter(d=>isCore(d.kind));
 const spokes = () => model.devices.filter(d=>LEAF.has(d.kind));   // leaf nodes (bottom tier)
 function primaryHub(sp){                       // core node this spoke first connects to
@@ -390,6 +390,15 @@ function netskopeIcon(cx,cy,r){ const f=n=>n.toFixed(1), gy="#5b5b66";
   g+=`<circle cx="${f(cx-0.1*r)}" cy="${f(cy+0.5*r)}" r="${f(0.2*r)}" fill="#ff8a00"/>`;
   g+=`<circle cx="${f(cx+0.42*r)}" cy="${f(cy-0.46*r)}" r="${f(0.2*r)}" fill="none" stroke="#1aa8e0" stroke-width="${f(0.13*r)}"/>`;
   return g; }
+// Internet: blue cloud outline
+function internetIcon(cx,cy,r){ const s=(2.7*r)/24, tx=(cx-12*s).toFixed(2), ty=(cy-13*s).toFixed(2), sw=(1.8/s).toFixed(2);
+  return `<g transform="translate(${tx},${ty}) scale(${s.toFixed(3)})">`
+    +`<path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="#fff" stroke="#0d6efd" stroke-width="${sw}" stroke-linejoin="round"/></g>`; }
+function internetNode(p){
+  const r=34, lbl=esc(p.node.label);
+  return internetIcon(p.x,p.y,r)
+    +`<text x="${p.x}" y="${p.y+4}" text-anchor="middle" font-size="12" font-weight="600" fill="#1f6bb0">${lbl}</text>`;
+}
 const SSEICON={zscaler:zscalerIcon,prisma:prismaIcon,netskope:netskopeIcon};
 function sseNode(p){
   const r=30, ly=p.y+r+20, lbl=esc(p.node.label), w=lbl.length*7.6+12;
@@ -411,6 +420,7 @@ function deviceNode(p){
   if(p.kind==="cluster") return clusterNode(p);
   if(p.kind==="firewall") return firewallNode(p);
   if(p.kind==="vwan") return vwanNode(p);
+  if(p.kind==="internet") return internetNode(p);
   if(isSSE(p.kind)) return sseNode(p);
   const isHub=p.kind==="hub", fill=isHub?"var(--hub)":"var(--spoke)", r=isHub?38:32;
   const ly=isHub?p.y-r-14:p.y+r+20;              // hub label above, spoke label below — clear of links
@@ -731,8 +741,9 @@ function renderSuggestions(){
   const fwTargets=cand.filter(d=>d.kind==="firewall");
   const vwanTargets=cand.filter(d=>d.kind==="vwan");
   const sseTargets=cand.filter(d=>isSSE(d.kind));
+  const inetTargets=cand.filter(d=>d.kind==="internet");
   const gwTargets=[]; model.mgmt.planes.forEach(pl=>pl.services.forEach(sv=>{ if(sv.type==="vcg"){ const gid="svc:"+sv.id; if(!connected.has(gid)) gwTargets.push({id:gid,label:sv.label}); } }));
-  const kc=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":k==="firewall"?"#f4685f":k==="vwan"?"#38b6f1":k==="zscaler"?"#0d6efd":k==="prisma"?"#00c2e8":k==="netskope"?"#ff8a00":"#2b9fd8";
+  const kc=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":k==="firewall"?"#f4685f":k==="vwan"?"#38b6f1":k==="internet"?"#0d6efd":k==="zscaler"?"#0d6efd":k==="prisma"?"#00c2e8":k==="netskope"?"#ff8a00":"#2b9fd8";
   const sug=(tid,label,tag,color)=>`<li><span>${esc(label)} <span class="tag" style="background:${color}">${esc(tag)}</span></span>`
     +`<span class="ed" style="color:#159957;font-weight:800;font-size:15px" title="Add connection" onclick="connectSuggested('${sd.id}','${tid}')">＋</span></li>`;
   let h=`<div class="hint" style="margin-top:0">From <b>${esc(sd.label)}</b> — click ＋ to add.</div>`;
@@ -741,6 +752,7 @@ function renderSuggestions(){
   if(fwTargets.length) h+=`<div class="grp">Firewalls</div><ul class="links">${fwTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
   if(vwanTargets.length) h+=`<div class="grp">Virtual WAN</div><ul class="links">${vwanTargets.map(d=>sug(d.id,d.label,"vwan",kc(d.kind))).join("")}</ul>`;
   if(sseTargets.length) h+=`<div class="grp">SASE / SSE</div><ul class="links">${sseTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
+  if(inetTargets.length) h+=`<div class="grp">Internet</div><ul class="links">${inetTargets.map(d=>sug(d.id,d.label,"internet",kc(d.kind))).join("")}</ul>`;
   if(gwTargets.length) h+=`<div class="grp">Gateways</div><ul class="links">${gwTargets.map(g=>sug(g.id,g.label,"VCG","#2b9fd8")).join("")}</ul>`;
   if(!cand.length && !gwTargets.length) h+=`<div class="muted">No further connections available.</div>`;
   // always offer a new subnet on this device
@@ -750,6 +762,9 @@ function renderSuggestions(){
 }
 function canConnectKinds(a,b){                            // allowed device↔device pairs (gateways handled separately)
   const fwOK=k=>k==="spoke"||k==="hub"||k==="cluster";   // firewall / SASE connect to spoke/hub/cluster
+  const inetOK=k=>k==="spoke"||k==="hub"||k==="cluster"||k==="firewall";   // internet connects to edges + firewall
+  if(a==="internet") return inetOK(b);
+  if(b==="internet") return inetOK(a);
   if(a==="firewall"||isSSE(a)) return fwOK(b);
   if(b==="firewall"||isSSE(b)) return fwOK(a);
   if(isCore(a)&&isCore(b)) return true;                  // core ↔ core
@@ -774,7 +789,7 @@ function renderChecks(){ const el=document.getElementById("checks"); if(!el) ret
 function uid(p){ return p+Math.random().toString(36).slice(2,7); }
 function addDevice(kind,cloud){
   pushUndo();
-  const base=({hub:"Hub",cluster:"Cluster",firewall:"FW",vwan:"vWAN",zscaler:"Zscaler",prisma:"Prisma",netskope:"Netskope"})[kind]||"Spoke";
+  const base=({hub:"Hub",cluster:"Cluster",firewall:"FW",vwan:"vWAN",internet:"Internet",zscaler:"Zscaler",prisma:"Prisma",netskope:"Netskope"})[kind]||"Spoke";
   const name=base+(model.devices.filter(d=>d.kind===kind).length+1);
   model.devices.push({id:uid("d"),kind,label:name,cloud:cloud||undefined});
   render();
@@ -806,6 +821,7 @@ function buildPalette(){
       ["Cluster","addDevice('cluster')",clusterIc],
       ["Firewall","addDevice('firewall')",paletteSvg("0 0 28 28",firewallIcon(14,14,11,'var(--firewall)'))],
       ["Virtual WAN","addDevice('vwan')",paletteSvg("0 0 28 28",vwanIcon(14,14,11))],
+      ["Internet","addDevice('internet')",paletteSvg("0 0 28 28",internetIcon(14,14,11))],
       ["VCO","addMgmt('vco')",paletteSvg("0 0 28 28",vcoIcon(14,14,11))],
       ["VCG","addMgmt('vcg')",paletteSvg("0 0 28 28",vcgIcon(14,14,11))],
     ]},
