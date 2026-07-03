@@ -917,7 +917,7 @@ function cycleProvider(id){ const c=model.clouds.find(x=>x.id===id); if(!c) retu
   c.provider=order[(order.indexOf(c.provider)+1)%order.length]; render(); }
 function delCloud(id){ pushUndo(); model.clouds=model.clouds.filter(c=>c.id!==id); render(); }
 
-function resetModel(){ pushUndo(); model=referenceModel(); render(); centerScroll(); }
+function resetModel(){ pushUndo(); model=TEMPLATES.multiregion.build(); selected=new Set(); zoom=1; render(); centerScroll(); }
 function blankModel(){ return {devices:[],links:[],subnets:[],clouds:[],
   mgmt:{planes:[{id:"mp",label:"Management Plane",services:[]},{id:"cdp",label:"Control and Data Plane",services:[]}]}}; }
 function clearCanvas(){ if(!confirm("Clear the canvas? This removes all devices and connections.")) return;
