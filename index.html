@@ -40,6 +40,13 @@
   .btn:hover{filter:brightness(.96)}
   .toolbar{display:flex;gap:8px;margin-left:auto}
   .toolbar button{width:auto}
+  .dropdown{position:relative}
+  .menu{position:absolute;top:calc(100% + 6px);right:0;min-width:340px;max-height:72vh;overflow:auto;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 10px 28px rgba(16,24,40,.16);padding:6px;display:none;z-index:60}
+  .menu.open{display:block}
+  .menu a{display:block;padding:6px 10px;font-size:12px;color:#1f2937;text-decoration:none;border-radius:5px;white-space:nowrap}
+  .menu a:hover{background:#eef2f7}
+  .menu-grp{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#9ca3af;padding:9px 10px 3px;position:sticky;top:0;background:#fff}
+  .menu-grp:first-child{padding-top:4px}
   .row{display:flex;gap:8px}.row>*{flex:1}
   .hint{font-size:11px;color:#9ca3af;margin-top:6px;line-height:1.4}
   .links li{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:5px 7px;border:1px solid #eef0f2;border-radius:6px;margin-top:5px}
@@ -63,6 +70,10 @@
   </svg>
   <h1>Arista Velocloud - Topology Builder</h1>
   <div class="toolbar">
+    <div class="dropdown">
+      <button class="btn sec" onclick="toggleResources(event)">Velocloud resources ▾</button>
+      <div class="menu" id="res-menu"></div>
+    </div>
     <button class="btn sec" onclick="downloadJSON()">Export topology JSON</button>
     <button class="btn sec" onclick="downloadLucid()">Export Lucid import</button>
     <button class="btn sec" onclick="resetModel()">Reset to sample</button>
@@ -676,8 +687,79 @@ function initResize(){
   });
 }
 
+/* ================= VELOCLOUD RESOURCES MENU =========================== */
+const RES_BASE="https://www.arista.com/assets/data/pdf/";
+const RESOURCES=[
+  {g:"Guides & Deployment", items:[
+    ["VeloCloud SD-WAN Data Sheet","VeloCloud-SD-WAN-Data-Sheet.pdf"],
+    ["SD-WAN 6.4 Administration Guide","qsg/VC-SD-WAN-6.4-Administration-Guide.pdf"],
+    ["SD-WAN 6.4 Design Guide","qsg/VC-SD-WAN-6.4-Design-Guide.pdf"],
+    ["SD-WAN 5.2 Configuration Guide","qsg/VC-SD-WAN-5.2-Configuration-Guide.pdf"],
+    ["6.4 Gateway Monitoring Guide","qsg/VC-SD-WAN-6.4-Gateway-Monitoring-Guide.pdf"],
+    ["6.4 Operator Guide","qsg/VC-SD-WAN-6.4-Operator-Guide.pdf"],
+    ["6.4 Orchestrator Guide","qsg/VC-SD-WAN-6.4-Orchestrator-Guide.pdf"],
+    ["6.4 Partner Guide","qsg/VC-SD-WAN-6.4-Partner-Guide.pdf"],
+    ["6.4 Troubleshooting Guide","qsg/VC-SD-WAN-6.4-Troubleshooting-Guide.pdf"],
+    ["License Management User Guide","user-manual/VC-SD-WAN-License-Management-User-Guide.pdf"],
+    ["VeloBrain 6.4 User Guide","user-manual/VC-VeloBrain-6.4-User-Guide.pdf"],
+    ["AWS Virtual Edge Deployment Guide","qsg/VC-SD-WAN-AWS-Virtual-Edge-Deployment-Guide.pdf"],
+    ["Azure Virtual Edge Deployment Guide","qsg/VC-SD-WAN-Azure-Virtual-Edge-Deployment-Guide.pdf"],
+    ["Azure Private MEC Deployment Guide","qsg/VC-SD-WAN-Azure-Private-MEC-Deployment-Guide.pdf"],
+    ["GCP Virtual Edge Deployment Guide","qsg/VC-SD-WAN-GCP-Virtual-Edge-Deployment-Guide.pdf"],
+    ["AliCloud Virtual Edge Deployment Guide","qsg/VC-SD-WAN-AliCloud-Virtual-Edge-Deployment-Guide.pdf"],
+    ["VMware Cloud Deployment Guide","qsg/VC-SD-WAN-VMware-Cloud-Deployment-Guide.pdf"],
+  ]},
+  {g:"Integrations & SASE", items:[
+    ["FP-SSE Integration Guide","qsg/VC-SD-WAN-FP-SSE-Integration-Guide.pdf"],
+    ["GNC Integration Guide","qsg/VC-SD-WAN-GNC-Integration-Guide.pdf"],
+    ["MS Integration Guide","qsg/VC-SD-WAN-MS-Integration-Guide.pdf"],
+    ["Netskope SSE Integration Guide","qsg/VC-SD-WAN-Netskope-SSE-Integration-Guide.pdf"],
+    ["PAN Configuration Guide","qsg/VC-SD-WAN-PAN-Configuration-Guide.pdf"],
+    ["Symantec Configuration Guide","qsg/VC-SD-WAN-Symantec-Configuration-Guide.pdf"],
+    ["SASE 6.4 Global Settings Guide","qsg/VC-SASE-6.4-Global-Settings-Guide.pdf"],
+    ["SASE QRadar Integration Guide","qsg/VC-SASE-QRadar-Integration-Guide.pdf"],
+  ]},
+  {g:"Release Notes", items:[
+    ["SD-WAN 6.4 Release Notes","release-notes/VC-SD-WAN-6.4-Release-Notes.pdf"],
+  ]},
+  {g:"Orchestrator APIs", items:[
+    ["6.4 OpenAPI Guide","qsg/velo-api/VC-SD-WAN-6.4-Orchestrator-OpenAPI-Guide.pdf"],
+    ["6.4 OpenAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.4-Orchestrator-OpenAPI.json"],
+    ["6.4 PortalAPI Guide","qsg/velo-api/VC-SD-WAN-6.4-Orchestrator-PortalAPI-Guide.pdf"],
+    ["6.4 PortalAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.4-Orchestrator-PortalAPI.json"],
+    ["6.4 RdwAPI Guide","qsg/velo-api/VC-SD-WAN-6.4-Orchestrator-RdwAPI-Guide.pdf"],
+    ["6.4 RdwAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.4-Orchestrator-RdwAPI.json"],
+    ["6.3.1 OpenAPI Guide","qsg/velo-api/VC-SD-WAN-6.3.1-Orchestrator-OpenAPI-Guide.pdf"],
+    ["6.3.1 OpenAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.3.1-Orchestrator-OpenAPI.json"],
+    ["6.3.1 PortalAPI Guide","qsg/velo-api/VC-SD-WAN-6.3.1-Orchestrator-PortalAPI-Guide.pdf"],
+    ["6.3.1 PortalAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.3.1-Orchestrator-PortalAPI.json"],
+    ["6.2 OpenAPI Guide","qsg/velo-api/VC-SD-WAN-6.2-Orchestrator-OpenAPI-Guide.pdf"],
+    ["6.2 OpenAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.2-Orchestrator-OpenAPI.json"],
+    ["6.2 PortalAPI Guide","qsg/velo-api/VC-SD-WAN-6.2-Orchestrator-PortalAPI-Guide.pdf"],
+    ["6.2 PortalAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.2-Orchestrator-PortalAPI.json"],
+    ["6.1 OpenAPI Guide","qsg/velo-api/VC-SD-WAN-6.1-Orchestrator-OpenAPI-Guide.pdf"],
+    ["6.1 OpenAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.1-Orchestrator-OpenAPI.json"],
+    ["6.1 PortalAPI Guide","qsg/velo-api/VC-SD-WAN-6.1-Orchestrator-PortalAPI-Guide.pdf"],
+    ["6.1 PortalAPI (JSON)","qsg/velo-api/VC-SD-WAN-6.1-Orchestrator-PortalAPI.json"],
+    ["5.2.3 OpenAPI Guide","qsg/velo-api/VC-SD-WAN-5.2.3-Orchestrator-OpenAPI-Guide.pdf"],
+    ["5.2.3 OpenAPI (JSON)","qsg/velo-api/VC-SD-WAN-5.2.3-Orchestrator-OpenAPI.json"],
+    ["5.2.3 PortalAPI Guide","qsg/velo-api/VC-SD-WAN-5.2.3-Orchestrator-PortalAPI-Guide.pdf"],
+    ["5.2.3 PortalAPI (JSON)","qsg/velo-api/VC-SD-WAN-5.2.3-Orchestrator-PortalAPI.json"],
+  ]},
+];
+function buildResources(){
+  const el=document.getElementById("res-menu"); if(!el) return;
+  el.innerHTML=RESOURCES.map(sec=>
+    `<div class="menu-grp">${sec.g}</div>`+
+    sec.items.map(([label,path])=>`<a href="${RES_BASE}${path}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")
+  ).join("");
+}
+function toggleResources(e){ e.stopPropagation(); document.getElementById("res-menu").classList.toggle("open"); }
+document.addEventListener("click",()=>document.getElementById("res-menu")?.classList.remove("open"));
+
 window.addEventListener("keydown",e=>{ if(e.key==="Escape") clearSelection(); });
 
+buildResources();
 render();
 initDraw();
 initResize();
