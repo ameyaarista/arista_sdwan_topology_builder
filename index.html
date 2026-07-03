@@ -727,9 +727,13 @@ function delSubnet(id){ pushUndo(); model.subnets=model.subnets.filter(s=>s.id!=
 // ---- management services (per plane) ----
 const plane=id=>model.mgmt.planes.find(p=>p.id===id);
 function addService(){
-  const pl=plane(document.getElementById("m-plane").value); if(!pl) return;
-  pushUndo();
   const type=document.getElementById("m-type").value;
+  // gateways (VCG) always land on the Control and Data Plane
+  const pl = type==="vcg"
+    ? (plane("cdp") || model.mgmt.planes.find(p=>/control.*data/i.test(p.label)) || plane(document.getElementById("m-plane").value))
+    : plane(document.getElementById("m-plane").value);
+  if(!pl) return;
+  pushUndo();
   const label=(document.getElementById("m-label").value||SVCLABEL[type]||"node").trim();
   pl.services.push({id:uid("sv"),label,ip:document.getElementById("m-ip").value.trim(),type});
   document.getElementById("m-label").value=""; document.getElementById("m-ip").value=""; render();
