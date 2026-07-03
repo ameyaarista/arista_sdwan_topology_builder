@@ -439,11 +439,20 @@ function render(){
   model.links.forEach(l=>{ const a=pos[l.from],b=pos[l.to]; if(a&&b) s+=linkLine(a,b,linkStyleKey(l)); });
   model.subnets.forEach(su=>{ const a=pos[su.anchor],p=pos[su.id]; if(a&&p) s+=linkLine(a,{x:p.x,y:p.y+(p.y<a.y?18:-18)},"direct").split("<rect")[0]; });
   model.clouds.forEach(c=>{ const a=pos[c.anchor],p=pos[c.id]; if(a&&p) s+=`<line x1="${a.x}" y1="${a.y}" x2="${p.x}" y2="${p.y+(p.y<a.y?26:-26)}" stroke="var(--cloud-b)" stroke-width="2"/>`; });
-  // selection halos (under nodes)
+  // selection halos (under nodes) + delete badges (collected, drawn on top)
+  let selBadges="";
   selected.forEach(id=>{ const p=pos[id]; if(!p) return;
     const hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="cloud"?86:(p.kind?50:64);
     const hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="cloud"?38:(p.kind?52:24);
-    s+=`<rect x="${p.x-hw}" y="${p.y-hh}" width="${hw*2}" height="${hh*2}" rx="10" fill="rgba(37,99,235,.08)" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 3"/>`; });
+    s+=`<rect x="${p.x-hw}" y="${p.y-hh}" width="${hw*2}" height="${hh*2}" rx="10" fill="rgba(37,99,235,.08)" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+    if(dev(id)||model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)){
+      const bx=p.x+hw-4, by=p.y-hh+10;
+      selBadges+=`<g class="del-badge" data-id="${id}" style="cursor:pointer"><title>Delete this node and its connections</title>`
+        +`<circle cx="${bx}" cy="${by}" r="9" fill="#dc2626" stroke="#fff" stroke-width="1.5"/>`
+        +`<line x1="${bx-3.4}" y1="${by-3.4}" x2="${bx+3.4}" y2="${by+3.4}" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>`
+        +`<line x1="${bx-3.4}" y1="${by+3.4}" x2="${bx+3.4}" y2="${by-3.4}" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></g>`;
+    }
+  });
   // management planes — dotted rects, positions from layout
   model.mgmt.planes.forEach(pl=>{ const P=pos["plane:"+pl.id]; if(!P) return; const top=P.y-P.mH/2;
     let mg=`<rect x="${P.x-P.mW/2}" y="${top}" width="${P.mW}" height="${P.mH}" rx="8" fill="var(--mgmt)" stroke="var(--mgmt-b)" stroke-width="1.5" stroke-dasharray="7 5"/>`
@@ -463,6 +472,7 @@ function render(){
   model.subnets.forEach(su=>{ if(pos[su.id]) s+=`<g class="node" data-id="${su.id}" style="cursor:grab">${subnetNode(pos[su.id])}</g>`; });
   model.clouds.forEach(c=>{ if(pos[c.id]) s+=`<g class="node" data-id="${c.id}" style="cursor:grab">${cloudNode(pos[c.id])}</g>`; });
   model.devices.forEach(d=>{ if(pos[d.id]) s+=`<g class="node" data-id="${d.id}" style="cursor:grab">${deviceNode(pos[d.id])}</g>`; });
+  s+=selBadges;                                             // delete badges above everything
   // bounds -> viewBox (allows negative coords for clouds above planes)
   let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
   Object.values(pos).forEach(p=>{
@@ -499,6 +509,8 @@ function selectableIds(){ return [
   ...model.clouds.map(c=>c.id), ...model.mgmt.planes.map(p=>"plane:"+p.id) ]; }
 function bindDrag(svg){
   svg.addEventListener("pointerdown",e=>{
+    const badge=e.target.closest(".del-badge");
+    if(badge){ e.preventDefault(); e.stopPropagation(); deleteSelectedEntity(badge.dataset.id); return; }
     const g=e.target.closest(".node");
     if(g){
       const id=g.dataset.id;
@@ -546,6 +558,17 @@ function updateMarquee(e){
 }
 function endMarquee(){ if(!marquee) return; marquee.div.remove(); marquee=null; render(); }
 function clearSelection(){ if(selected.size){ selected=new Set(); render(); } }
+function deleteSelectedEntity(id){
+  pushUndo();
+  if(dev(id)){                                             // device -> also drop its links/subnets/clouds
+    model.devices=model.devices.filter(x=>x.id!==id);
+    model.links=model.links.filter(l=>l.from!==id&&l.to!==id);
+    model.subnets=model.subnets.filter(s=>s.anchor!==id);
+    model.clouds=model.clouds.filter(c=>c.anchor!==id);
+  } else if(model.subnets.some(s=>s.id===id)){ model.subnets=model.subnets.filter(s=>s.id!==id); }
+  else if(model.clouds.some(c=>c.id===id)){ model.clouds=model.clouds.filter(c=>c.id!==id); }
+  selected.delete(id); render();
+}
 
 /* ================= PEN / ANNOTATION OVERLAY =========================== */
 let penColor=null, curStroke=null;
