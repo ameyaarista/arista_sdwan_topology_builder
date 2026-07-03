@@ -580,7 +580,7 @@ function bindDrag(svg){
       if(!selected.has(id)) selected=new Set([id]);       // fresh single selection
       const geo=computeGeometry(), start={};
       selected.forEach(sid=>{ const gp=geo[sid]; if(gp) start[sid]={x:gp.x,y:gp.y}; });
-      drag={ids:[...selected], start, startLoc:svgPoint(svg,e)};
+      drag={ids:[...selected], start, sx:e.clientX, sy:e.clientY};   // screen-space anchor (viewBox-independent)
       g.style.cursor="grabbing"; render(); e.preventDefault();
     } else {
       const lg=e.target.closest(".link");
@@ -592,10 +592,9 @@ function bindDrag(svg){
     const en=entity(g.dataset.id); if(en){delete en.x;delete en.y;render();} });   // dbl-click = reset to auto
   if(winBound) return; winBound=true;
   window.addEventListener("pointermove",e=>{
-    if(drag){ const svg=document.getElementById("topo"); if(!svg) return;
-      const loc=svgPoint(svg,e), dx=loc.x-drag.startLoc.x, dy=loc.y-drag.startLoc.y;
-      if(!drag.moved && (Math.abs(dx)>1||Math.abs(dy)>1)){ drag.moved=true; pushUndo(); } // one history entry per drag
-      drag.ids.forEach(id=>{ const en=entity(id), s=drag.start[id]; if(en&&s){ en.x=s.x+dx; en.y=s.y+dy; } });
+    if(drag){ const dux=(e.clientX-drag.sx)/zoom, duy=(e.clientY-drag.sy)/zoom;   // screen delta ÷ zoom = stable user delta
+      if(!drag.moved && (Math.abs(e.clientX-drag.sx)>2||Math.abs(e.clientY-drag.sy)>2)){ drag.moved=true; pushUndo(); }
+      drag.ids.forEach(id=>{ const en=entity(id), s=drag.start[id]; if(en&&s){ en.x=s.x+dux; en.y=s.y+duy; } });
       scheduleRender(); return; }
     if(marquee) updateMarquee(e);
   });
