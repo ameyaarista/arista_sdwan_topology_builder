@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arista Velocloud - Topology Builder</title>
+<style>
+  :root{
+    --hub:#57bf5b; --spoke:#2b9fd8; --subnet:#eaf4ff; --subnet-b:#2f80c9;
+    --cloud:#fff4e0; --cloud-b:#e0a94b; --mgmt:#f4f4f4; --mgmt-b:#9aa0a6;
+    --sdwan:#159957; --ipsec:#d97706; --direct:#6b7280; --text:#1f2937;
+  }
+  *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{margin:0;background:#f7f8fa;color:var(--text)}
+  header{padding:14px 20px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header .sub{font-size:12px;color:#6b7280}
+  .layout{display:flex;height:calc(100vh - 55px);min-height:620px}
+  .panel{width:320px;min-width:320px;background:#fff;border-right:1px solid #e5e7eb;padding:16px;overflow:auto}
+  .panel.right{border-right:none;border-left:1px solid #e5e7eb}
+  .canvas{flex:1;overflow:auto;background:#fff;position:relative}
+  #stage{position:relative}
+  #draw{position:absolute;top:0;left:0;pointer-events:none}
+  #pen-tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .pentool{width:28px;height:28px;border-radius:6px;border:2px solid #e5e7eb;background:var(--c,#fff);cursor:pointer;padding:0;line-height:1}
+  .pentool.sel{background:#eef2f7;color:#374151;font-size:13px}
+  .pentool.active{border-color:#111827;box-shadow:0 0 0 2px rgba(0,0,0,.10)}
+  .section{margin-bottom:16px;border:1px solid #eef0f2;border-radius:8px;padding:12px}
+  .section h2{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin:0 0 10px}
+  label{display:block;font-size:12px;color:#374151;margin:8px 0 3px}
+  input,select{width:100%;padding:7px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px}
+  button{cursor:pointer;border:none;border-radius:6px;padding:8px 12px;font-size:13px;font-weight:500}
+  .btn{color:#fff;width:100%;margin-top:10px}
+  .btn.hub{background:#1f6bb0}.btn.spoke{background:#2f80c9}.btn.link{background:#159957}
+  .btn.add{background:#4b5563}
+  .btn.sec{background:#eef2f7;color:#1f2937}
+  .btn:hover{filter:brightness(.96)}
+  .toolbar{display:flex;gap:8px;margin-left:auto}
+  .toolbar button{width:auto}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .hint{font-size:11px;color:#9ca3af;margin-top:6px;line-height:1.4}
+  .links li{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:5px 7px;border:1px solid #eef0f2;border-radius:6px;margin-top:5px}
+  .links{list-style:none;padding:0;margin:8px 0 0}
+  .links .x{color:#d23c3c;cursor:pointer;font-weight:700;padding:0 4px}
+  .links .ed{color:#2563eb;cursor:pointer;padding:0 4px}
+  .links .tag{cursor:pointer}
+  .grp{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#9ca3af;margin:10px 0 2px}
+  .grp:first-child{margin-top:0}
+  .muted{font-size:12px;color:#9ca3af;padding:4px 2px}
+  .tag{font-size:10px;padding:1px 6px;border-radius:10px;color:#fff}
+  svg{display:block}
+</style>
+</head>
+<body>
+<header>
+  <!-- To use the exact Arista logo: save it as arista-logo.png in this folder and replace this <svg> block with:
+       <img src="arista-logo.png" alt="Arista" height="26" style="flex:0 0 auto"> -->
+  <svg width="150" height="30" viewBox="0 0 150 30" aria-label="Arista" style="flex:0 0 auto">
+    <text x="0" y="23" font-family="'Century Gothic','Futura','Trebuchet MS','Segoe UI',sans-serif" font-size="25" font-weight="500" letter-spacing="4" fill="#16255c">ARISTA</text>
+  </svg>
+  <h1>Arista Velocloud - Topology Builder</h1>
+  <div class="toolbar">
+    <button class="btn sec" onclick="downloadJSON()">Export topology JSON</button>
+    <button class="btn sec" onclick="downloadLucid()">Export Lucid import</button>
+    <button class="btn sec" onclick="resetModel()">Reset to sample</button>
+    <button class="btn sec" onclick="clearCanvas()" style="background:#fde8e8;color:#b91c1c">Clear canvas</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="panel">
+
+    <div class="section">
+      <h2>Annotate</h2>
+      <div id="pen-tools">
+        <button class="pentool sel active" data-color="" title="Select / move" onclick="setPen('')">✥</button>
+        <button class="pentool" style="--c:#e11d48" data-color="#e11d48" title="Red" onclick="setPen('#e11d48')"></button>
+        <button class="pentool" style="--c:#2563eb" data-color="#2563eb" title="Blue" onclick="setPen('#2563eb')"></button>
+        <button class="pentool" style="--c:#16a34a" data-color="#16a34a" title="Green" onclick="setPen('#16a34a')"></button>
+        <button class="pentool" style="--c:#f59e0b" data-color="#f59e0b" title="Orange" onclick="setPen('#f59e0b')"></button>
+        <button class="pentool" style="--c:#111827" data-color="#111827" title="Black" onclick="setPen('#111827')"></button>
+      </div>
+      <button class="btn sec" onclick="clearDrawing()">Clear drawing</button>
+      <div class="hint">Pick a color to draw on the topology; ✥ returns to select/move mode.</div>
+    </div>
+
+    <div class="section">
+      <h2>Add device</h2>
+      <div class="row">
+        <div><label>Name</label><input id="d-name" placeholder="Hub1 / Spoke1"></div>
+        <div><label>Hosted in</label>
+          <select id="d-cloud">
+            <option value="">On-prem</option>
+            <option value="aws">AWS</option>
+            <option value="azure">Azure</option>
+            <option value="gcp">GCP</option>
+          </select>
+        </div>
+      </div>
+      <label>Host subnet CIDR (optional)</label>
+      <input id="d-cidr" placeholder="10.0.1.0/24">
+      <label>Connect to (optional)</label>
+      <div class="row">
+        <select id="d-connto"></select>
+        <select id="d-conntr">
+          <option value="sdwan">SD-WAN</option>
+          <option value="ipsec">IPsec</option>
+          <option value="direct">Direct</option>
+        </select>
+      </div>
+      <div class="row">
+        <button class="btn hub" onclick="addDevice('hub')">+ Add hub</button>
+        <button class="btn spoke" onclick="addDevice('spoke')">+ Add spoke</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Connect nodes</h2>
+      <div class="row">
+        <div><label>From</label><select id="c-from"></select></div>
+        <div><label>To</label><select id="c-to"></select></div>
+      </div>
+      <label>Transport</label>
+      <select id="c-tr">
+        <option value="sdwan">SD-WAN overlay</option>
+        <option value="ipsec">IPsec tunnel</option>
+        <option value="direct">Direct link</option>
+      </select>
+      <button class="btn link" onclick="addLink()">+ Connect</button>
+      <ul class="links" id="link-list"></ul>
+    </div>
+
+    <div class="section">
+      <h2>Cloud connection</h2>
+      <div class="row">
+        <div><label>Provider</label>
+          <select id="cl-prov"><option value="aws">AWS</option><option value="azure">Azure</option><option value="gcp">GCP</option></select>
+        </div>
+        <div><label>CIDR</label><input id="cl-cidr" placeholder="10.20.0.0/16"></div>
+      </div>
+      <label>Attach to (device or VCG gateway)</label>
+      <select id="cl-anchor"></select>
+      <button class="btn add" onclick="addCloud()">+ Add cloud</button>
+    </div>
+
+    <div class="section">
+      <h2>Add subnet</h2>
+      <label>CIDR</label>
+      <input id="su-cidr" placeholder="10.0.1.0/24">
+      <label>Attach to device</label>
+      <select id="su-anchor"></select>
+      <button class="btn add" onclick="addSubnet()">+ Add subnet</button>
+    </div>
+
+    <div class="section">
+      <h2>SD-WAN Management node</h2>
+      <label>Plane</label>
+      <select id="m-plane"></select>
+      <label>Type</label>
+      <select id="m-type">
+        <option value="vco">VCO — Orchestrator</option>
+        <option value="vcg">VCG — Gateway</option>
+        <option value="syslog">Syslog / other</option>
+      </select>
+      <div class="row">
+        <div><label>Label</label><input id="m-label" placeholder="VCO / GW1"></div>
+        <div><label>IP</label><input id="m-ip" placeholder="172.16.23.x"></div>
+      </div>
+      <button class="btn add" onclick="addService()">+ Add management node</button>
+    </div>
+
+  </aside>
+
+  <main class="canvas">
+    <div id="stage">
+      <div id="topo-holder"></div>
+      <svg id="draw" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </main>
+
+  <aside class="panel right">
+    <div class="section">
+      <h2>Edit elements</h2>
+      <div id="elements"></div>
+      <div class="hint">✎ edit fields · ✕ delete · click a colored tag to change type. Deleting a device also removes its links, subnets and clouds.</div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ================= DATA MODEL — single source of truth ================= */
+function referenceModel(){
+  return {
+    devices:[
+      {id:"rfw1a", kind:"spoke", label:"Spoke1"},
+      {id:"cfw1a", kind:"hub",   label:"Hub1"},
+      {id:"cfw2a", kind:"hub",   label:"Hub2"},
+      {id:"rfw2a", kind:"spoke", label:"Spoke2"}
+    ],
+    links:[
+      {id:"l1", from:"rfw1a", to:"cfw1a", transport:"sdwan"},
+      {id:"l3", from:"cfw2a", to:"rfw2a", transport:"sdwan"}
+    ],
+    subnets:[
+      {id:"s1", anchor:"cfw1a", cidr:"10.0.1.0/24"},
+      {id:"s2", anchor:"cfw2a", cidr:"10.0.2.0/24"},
+      {id:"s3", anchor:"rfw1a", cidr:"10.0.3.0/24"},
+      {id:"s4", anchor:"rfw2a", cidr:"10.0.4.0/24"}
+    ],
+    clouds:[],
+    mgmt:{planes:[
+      {id:"mp",  label:"Management Plane",        services:[{id:"vco1",label:"VCO",ip:"172.16.23.252",type:"vco"}]},
+      {id:"cdp", label:"Control and Data Plane",  services:[{id:"gw1",label:"GW1",ip:"172.16.23.253",type:"vcg"},{id:"gw2",label:"GW2",ip:"172.16.23.158",type:"vcg"}]}
+    ]}
+  };
+}
+let model = referenceModel();
+const dev = id => model.devices.find(d=>d.id===id);
+const hubs = () => model.devices.filter(d=>d.kind==="hub");
+const spokes = () => model.devices.filter(d=>d.kind==="spoke");
+function primaryHub(sp){                       // hub this spoke first connects to
+  for(const l of model.links){
+    if(l.from===sp.id && dev(l.to)?.kind==="hub") return l.to;
+    if(l.to===sp.id   && dev(l.from)?.kind==="hub") return l.from;
+  }
+  return null;
+}
+
+/* ================= LAYOUT — hub-and-spoke (ELK/dagre in prod) ========== */
+const G={startX:170,hubY:340,dxSpoke:180,spokeGap:190,hubGap:80,mgmtTop:80};
+function computeGeometry(){
+  const pos={};
+  const byHub={}; const orphan=[];
+  spokes().forEach(sp=>{ const h=primaryHub(sp); if(h){(byHub[h]=byHub[h]||[]).push(sp);} else orphan.push(sp); });
+
+  // tiers: hubs in a middle row, all their spokes in a row below
+  let cursor=G.startX;
+  hubs().forEach(h=>{
+    const grp=byHub[h.id]||[];
+    const width=Math.max(1,grp.length)*G.dxSpoke;
+    const hx=cursor+width/2;
+    pos[h.id]={x:hx,y:G.hubY,kind:"hub",node:h};
+    grp.forEach((s,i)=>{ pos[s.id]={x:hx-(grp.length-1)*G.dxSpoke/2+i*G.dxSpoke, y:G.hubY+G.spokeGap, kind:"spoke", node:s}; });
+    cursor+=Math.max(width,180)+G.hubGap;
+  });
+  // orphan spokes (not attached to a hub) sit in the spoke row on the left
+  orphan.forEach((s,i)=>{ pos[s.id]={x:G.startX+i*G.dxSpoke, y:G.hubY+G.spokeGap, kind:"spoke", node:s}; });
+  if(hubs().length===0) spokes().forEach((s,i)=>{ if(!pos[s.id]) pos[s.id]={x:G.startX+i*G.dxSpoke,y:G.hubY+G.spokeGap,kind:"spoke",node:s}; });
+
+  // manual drag overrides win over auto-layout
+  model.devices.forEach(d=>{ if(d.x!=null&&d.y!=null&&pos[d.id]){pos[d.id].x=d.x;pos[d.id].y=d.y;} });
+
+  // management planes + their service nodes (top tier); positions stored so clouds can anchor to a VCG
+  const shownPlanes=model.mgmt.planes.filter(pl=>pl.services.length||model.devices.length);
+  const pMH=146, pGap=60;
+  const pdims=shownPlanes.map(pl=>({pl, mW:Math.max(220, pl.services.length*90+50)}));
+  const pTotal=pdims.reduce((a,d)=>a+d.mW,0)+pGap*Math.max(0,pdims.length-1);
+  const devXs=model.devices.map(d=>pos[d.id]?.x).filter(v=>v!=null);
+  const spanC=devXs.length?(Math.min(...devXs)+Math.max(...devXs))/2:400;
+  let flowX=spanC-pTotal/2;
+  pdims.forEach(d=>{
+    const defCx=flowX+d.mW/2; flowX+=d.mW+pGap;
+    const mgX=d.pl.x!=null?d.pl.x:defCx, mgY=d.pl.y!=null?d.pl.y:G.mgmtTop;
+    pos["plane:"+d.pl.id]={x:mgX,y:mgY,mW:d.mW,mH:pMH,ptype:"plane",pl:d.pl};
+    d.pl.services.forEach((sv,i)=>{ const n=d.pl.services.length;
+      pos["svc:"+sv.id]={x:mgX-(n-1)*45+i*90, y:mgY+16, ptype:"svc", svc:sv, plane:d.pl}; });
+  });
+
+  // attach subnets/clouds on the side of a device AWAY from its links (avoids overlap)
+  const off={};
+  const dir=id=>{ let sum=0,c=0; model.links.forEach(l=>{ const o=l.from===id?l.to:l.to===id?l.from:null;
+    if(o&&pos[o]){sum+=pos[o].y-pos[id].y;c++;} }); return c?sum/c:0; };
+  const place=(anchor,box)=>{ const a=pos[anchor]; if(!a) return null;
+    const side=dir(anchor)>=0?-1:1; const k=anchor+side; const n=(off[k]=(off[k]||0)+1);
+    return {x:a.x, y:a.y+side*(100+(n-1)*70), side, ...box}; };
+  model.subnets.forEach(su=>{ const p=place(su.anchor,{w:150,h:46,node:su,ptype:"subnet"}); if(!p) return;
+    if(su.x!=null){p.x=su.x;p.y=su.y;} pos[su.id]=p; });
+  model.clouds.forEach(c=>{ const a=pos[c.anchor]; if(!a) return; let p;
+    if(c.anchor.startsWith("svc:")){ const k="cl"+c.anchor; const n=(off[k]=(off[k]||0)+1);
+      p={x:a.x, y:a.y-120-(n-1)*76, node:c, ptype:"cloud"}; }   // cloud from a VCG sits above the plane
+    else p=place(c.anchor,{node:c,ptype:"cloud"});
+    if(!p) return; if(c.x!=null){p.x=c.x;p.y=c.y;} pos[c.id]=p; });
+  return pos;
+}
+
+/* ================= RENDER ============================================== */
+const esc=s=>String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+const TR={sdwan:{c:"var(--sdwan)",t:"SD-WAN",dash:""},ipsec:{c:"var(--ipsec)",t:"IPsec",dash:'stroke-dasharray="6 4"'},direct:{c:"var(--direct)",t:"Direct",dash:""}};
+
+function linkLine(a,b,tr){
+  const s=TR[tr]||TR.direct; const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+  return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${s.c}" stroke-width="2" ${s.dash}/>`
+    +`<rect x="${mx-30}" y="${my-9}" width="60" height="16" rx="8" fill="${s.c}"/>`
+    +`<text x="${mx}" y="${my+3}" text-anchor="middle" font-size="9" fill="#fff">${s.t}</text>`;
+}
+// SD-WAN edge icon: colored disc + white router glyph (blue=spoke, green=hub)
+function edgeIcon(cx,cy,r,fill){
+  const sw=(r*0.055).toFixed(2), f=n=>n.toFixed(1);
+  const wl=(x1,y1,x2,y2)=>`<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="#fff" stroke-width="${sw}" stroke-linecap="round"/>`;
+  const wd=(x,y,rr)=>`<circle cx="${f(x)}" cy="${f(y)}" r="${f(rr)}" fill="#fff"/>`;
+  let g=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"/>`;
+  [-1,0,1].forEach(i=>{                                   // radiating nodes, top + bottom
+    const sx=cx+i*0.22*r, dx=cx+i*0.34*r;
+    g+=wl(sx,cy-0.16*r,dx,cy-0.46*r)+wd(dx,cy-0.46*r,0.08*r);
+    g+=wl(sx,cy+0.16*r,dx,cy+0.46*r)+wd(dx,cy+0.46*r,0.08*r);
+  });
+  g+=`<rect x="${f(cx-0.5*r)}" y="${f(cy-0.16*r)}" width="${f(r)}" height="${f(0.32*r)}" rx="2" fill="none" stroke="#fff" stroke-width="${sw}"/>`;
+  g+=`<rect x="${f(cx+0.15*r)}" y="${f(cy+0.02*r)}" width="${f(0.27*r)}" height="${f(0.06*r)}" fill="#fff"/>`; // cloud base
+  g+=wd(cx+0.2*r,cy+0.02*r,0.06*r)+wd(cx+0.3*r,cy-0.04*r,0.08*r)+wd(cx+0.4*r,cy+0.02*r,0.06*r);
+  return g;
+}
+// VeloCloud Gateway (VCG): blue disc, white cloud + double-arrow ring
+function vcgIcon(cx,cy,r){
+  const sw=Math.max(1.2,r*0.09).toFixed(2), f=n=>n.toFixed(1);
+  let g=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#2b9fd8"/>`;
+  g+=`<rect x="${f(cx-0.34*r)}" y="${f(cy-0.34*r)}" width="${f(0.68*r)}" height="${f(0.2*r)}" fill="#fff"/>`;
+  g+=`<circle cx="${f(cx-0.2*r)}" cy="${f(cy-0.34*r)}" r="${f(0.17*r)}" fill="#fff"/>`;
+  g+=`<circle cx="${f(cx+0.04*r)}" cy="${f(cy-0.44*r)}" r="${f(0.22*r)}" fill="#fff"/>`;
+  g+=`<circle cx="${f(cx+0.26*r)}" cy="${f(cy-0.34*r)}" r="${f(0.16*r)}" fill="#fff"/>`;
+  const ay=cy+0.28*r;
+  g+=`<circle cx="${cx}" cy="${f(ay)}" r="${f(0.34*r)}" fill="#2b9fd8" stroke="#fff" stroke-width="${sw}"/>`;
+  g+=`<line x1="${f(cx-0.2*r)}" y1="${f(ay)}" x2="${f(cx+0.2*r)}" y2="${f(ay)}" stroke="#fff" stroke-width="${sw}" stroke-linecap="round"/>`;
+  g+=`<polyline points="${f(cx-0.12*r)},${f(ay-0.1*r)} ${f(cx-0.22*r)},${f(ay)} ${f(cx-0.12*r)},${f(ay+0.1*r)}" fill="none" stroke="#fff" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  g+=`<polyline points="${f(cx+0.12*r)},${f(ay-0.1*r)} ${f(cx+0.22*r)},${f(ay)} ${f(cx+0.12*r)},${f(ay+0.1*r)}" fill="none" stroke="#fff" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return g;
+}
+// VeloCloud Orchestrator (VCO): green disc, white monitor with gear + toggles
+function vcoIcon(cx,cy,r){
+  const f=n=>n.toFixed(1), gr="#57bf5b";
+  let g=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${gr}"/>`;
+  g+=`<rect x="${f(cx-0.5*r)}" y="${f(cy-0.42*r)}" width="${f(r)}" height="${f(0.62*r)}" rx="${f(0.06*r)}" fill="#fff"/>`;
+  g+=`<rect x="${f(cx-0.08*r)}" y="${f(cy+0.2*r)}" width="${f(0.16*r)}" height="${f(0.14*r)}" fill="#fff"/>`;
+  g+=`<rect x="${f(cx-0.22*r)}" y="${f(cy+0.34*r)}" width="${f(0.44*r)}" height="${f(0.08*r)}" rx="${f(0.04*r)}" fill="#fff"/>`;
+  g+=`<circle cx="${f(cx-0.22*r)}" cy="${f(cy-0.1*r)}" r="${f(0.15*r)}" fill="none" stroke="${gr}" stroke-width="${f(0.07*r)}"/>`;
+  g+=`<circle cx="${f(cx-0.22*r)}" cy="${f(cy-0.1*r)}" r="${f(0.05*r)}" fill="${gr}"/>`;
+  g+=`<rect x="${f(cx+0.02*r)}" y="${f(cy-0.22*r)}" width="${f(0.34*r)}" height="${f(0.1*r)}" rx="${f(0.05*r)}" fill="${gr}"/>`;
+  g+=`<circle cx="${f(cx+0.28*r)}" cy="${f(cy-0.17*r)}" r="${f(0.06*r)}" fill="#fff" stroke="${gr}" stroke-width="${f(0.03*r)}"/>`;
+  g+=`<rect x="${f(cx+0.02*r)}" y="${f(cy-0.02*r)}" width="${f(0.34*r)}" height="${f(0.1*r)}" rx="${f(0.05*r)}" fill="${gr}"/>`;
+  g+=`<circle cx="${f(cx+0.1*r)}" cy="${f(cy+0.03*r)}" r="${f(0.06*r)}" fill="#fff" stroke="${gr}" stroke-width="${f(0.03*r)}"/>`;
+  return g;
+}
+function deviceNode(p){
+  const isHub=p.kind==="hub", fill=isHub?"var(--hub)":"var(--spoke)", r=isHub?38:32;
+  const ly=isHub?p.y-r-14:p.y+r+20;              // hub label above, spoke label below — clear of links
+  const lbl=esc(p.node.label), w=lbl.length*7.6+12;
+  const prov=p.node.cloud;
+  let cloudMark="";
+  if(prov){ const pc={aws:"#ff9900",azure:"#0089D6",gcp:"#4285F4"}[prov]||"#9ca3af";
+    cloudMark=`<circle cx="${p.x}" cy="${p.y}" r="${r+5}" fill="none" stroke="${pc}" stroke-width="2" stroke-dasharray="3 3"/>`
+      +`<g transform="translate(${p.x+r*0.72},${p.y-r*0.72}) scale(0.5)"><circle r="24" fill="#fff" stroke="#d0d5dd"/>${providerMark(0,0,prov)}</g>`;
+  }
+  return edgeIcon(p.x,p.y,r,fill)+cloudMark
+    +`<rect x="${p.x-w/2}" y="${ly-12}" width="${w}" height="17" rx="3" fill="#fff" opacity="0.92"/>`
+    +`<text x="${p.x}" y="${ly+1}" text-anchor="middle" font-size="13" font-weight="600" fill="#7c3aed">${lbl}</text>`;
+}
+function subnetNode(p){
+  const s=p.node;
+  return `<rect x="${p.x-58}" y="${p.y-17}" width="116" height="34" rx="5" fill="var(--subnet)" stroke="var(--subnet-b)"/>`
+    +`<text x="${p.x}" y="${p.y-3}" text-anchor="middle" font-size="9" fill="#6b7280">subnet</text>`
+    +`<text x="${p.x}" y="${p.y+11}" text-anchor="middle" font-size="11" font-weight="600" fill="#166534">${esc(s.cidr)}</text>`;
+}
+function providerMark(ix,iy,prov){
+  if(prov==="aws") return `<text x="${ix}" y="${iy+2}" text-anchor="middle" font-size="14" font-weight="800" fill="#232f3e">aws</text>`
+    +`<path d="M ${ix-12} ${iy+7} q 12 7 24 0" fill="none" stroke="#ff9900" stroke-width="2.4" stroke-linecap="round"/>`
+    +`<path d="M ${ix+7} ${iy+4} l 6 3 -3 5" fill="none" stroke="#ff9900" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if(prov==="azure") return `<path d="M ${ix-1} ${iy-13} L ${ix+13} ${iy+11} L ${ix-13} ${iy+11} Z" fill="#0089D6"/>`
+    +`<path d="M ${ix-1} ${iy-13} L ${ix-13} ${iy+11} L ${ix-3} ${iy+11} L ${ix+5} ${iy-2} Z" fill="#33bbf5"/>`;
+  if(prov==="gcp") return `<circle cx="${ix}" cy="${iy-9}" r="6.2" fill="#EA4335"/>`
+    +`<circle cx="${ix+9}" cy="${iy}" r="6.2" fill="#FBBC04"/>`
+    +`<circle cx="${ix}" cy="${iy+9}" r="6.2" fill="#34A853"/>`
+    +`<circle cx="${ix-9}" cy="${iy}" r="6.2" fill="#4285F4"/>`;
+  return `<circle cx="${ix}" cy="${iy}" r="12" fill="#9ca3af"/>`;
+}
+function cloudNode(p){
+  const c=p.node, name={aws:"AWS",azure:"Azure",gcp:"GCP"}[c.provider]||c.provider;
+  return `<rect x="${p.x-74}" y="${p.y-28}" width="150" height="58" rx="10" fill="#fff" stroke="#d0d5dd"/>`
+    +providerMark(p.x-48,p.y,c.provider)
+    +`<text x="${p.x+20}" y="${p.y-3}" text-anchor="middle" font-size="12" font-weight="700" fill="#374151">${esc(name)}</text>`
+    +`<text x="${p.x+20}" y="${p.y+14}" text-anchor="middle" font-size="10" fill="#6b7280">${esc(c.cidr)}</text>`;
+}
+function render(){
+  const pos=computeGeometry();
+  let s="";
+  // links (under nodes)
+  model.links.forEach(l=>{ const a=pos[l.from],b=pos[l.to]; if(a&&b) s+=linkLine(a,b,l.transport); });
+  model.subnets.forEach(su=>{ const a=pos[su.anchor],p=pos[su.id]; if(a&&p) s+=linkLine(a,{x:p.x,y:p.y+(p.y<a.y?18:-18)},"direct").split("<rect")[0]; });
+  model.clouds.forEach(c=>{ const a=pos[c.anchor],p=pos[c.id]; if(a&&p) s+=`<line x1="${a.x}" y1="${a.y}" x2="${p.x}" y2="${p.y+(p.y<a.y?26:-26)}" stroke="var(--cloud-b)" stroke-width="2"/>`; });
+  // management planes — dotted rects, positions from layout
+  model.mgmt.planes.forEach(pl=>{ const P=pos["plane:"+pl.id]; if(!P) return; const top=P.y-P.mH/2;
+    let mg=`<rect x="${P.x-P.mW/2}" y="${top}" width="${P.mW}" height="${P.mH}" rx="8" fill="var(--mgmt)" stroke="var(--mgmt-b)" stroke-width="1.5" stroke-dasharray="7 5"/>`
+      +`<text x="${P.x}" y="${top+26}" text-anchor="middle" font-size="12" font-weight="600">${esc(pl.label)}</text>`;
+    pl.services.forEach(sv=>{ const S=pos["svc:"+sv.id]; if(!S) return; const x=S.x, sy=S.y, ir=24;
+      if(sv.type==="vcg") mg+=vcgIcon(x,sy,ir);
+      else if(sv.type==="vco") mg+=vcoIcon(x,sy,ir);
+      else { const b=ir*0.55; mg+=`<circle cx="${x}" cy="${sy}" r="${ir}" fill="#2f80c9"/>`
+        +`<rect x="${x-b}" y="${sy-b}" width="${2*b}" height="${2*b}" rx="2" fill="none" stroke="#fff" stroke-width="1.8"/>`
+        +`<line x1="${x-b}" y1="${sy-b/3}" x2="${x+b}" y2="${sy-b/3}" stroke="#fff" stroke-width="1.4"/>`
+        +`<line x1="${x-b}" y1="${sy+b/3}" x2="${x+b}" y2="${sy+b/3}" stroke="#fff" stroke-width="1.4"/>`; }
+      mg+=`<text x="${x}" y="${sy+ir+12}" text-anchor="middle" font-size="9" font-weight="600" fill="#374151">${esc(sv.label)}</text>`
+        +`<text x="${x}" y="${sy+ir+23}" text-anchor="middle" font-size="8" fill="#6b7280">${esc(sv.ip)}</text>`; });
+    s+=`<g class="node" data-id="plane:${pl.id}" style="cursor:grab">${mg}</g>`;
+  });
+  // nodes on top — all draggable
+  model.subnets.forEach(su=>{ if(pos[su.id]) s+=`<g class="node" data-id="${su.id}" style="cursor:grab">${subnetNode(pos[su.id])}</g>`; });
+  model.clouds.forEach(c=>{ if(pos[c.id]) s+=`<g class="node" data-id="${c.id}" style="cursor:grab">${cloudNode(pos[c.id])}</g>`; });
+  model.devices.forEach(d=>{ if(pos[d.id]) s+=`<g class="node" data-id="${d.id}" style="cursor:grab">${deviceNode(pos[d.id])}</g>`; });
+  // bounds -> viewBox (allows negative coords for clouds above planes)
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  Object.values(pos).forEach(p=>{
+    const hw=p.ptype==="plane"?p.mW/2:p.ptype==="cloud"?80:(p.kind?60:80);
+    const hh=p.ptype==="plane"?p.mH/2:p.ptype==="cloud"?32:(p.kind?66:30);
+    minX=Math.min(minX,p.x-hw); maxX=Math.max(maxX,p.x+hw);
+    minY=Math.min(minY,p.y-hh); maxY=Math.max(maxY,p.y+hh); });
+  if(!isFinite(minX)){ minX=0;minY=0;maxX=560;maxY=360; }
+  minX-=30; minY-=30; maxX+=30; maxY+=40;
+  const W=maxX-minX, H=maxY-minY;
+  if(!model.devices.length)
+    s+=`<text x="${minX+W/2}" y="${minY+H/2-10}" text-anchor="middle" font-size="16" fill="#9ca3af">Blank canvas</text>`
+      +`<text x="${minX+W/2}" y="${minY+H/2+14}" text-anchor="middle" font-size="12" fill="#c0c4cc">Add a hub or spoke from the left panel to begin</text>`;
+  document.getElementById("topo-holder").innerHTML=`<svg id="topo" width="${W}" height="${H}" viewBox="${minX} ${minY} ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
+  const dr=document.getElementById("draw");                 // keep drawing layer aligned with topology
+  dr.setAttribute("width",W); dr.setAttribute("height",H); dr.setAttribute("viewBox",`${minX} ${minY} ${W} ${H}`);
+  bindDrag(document.getElementById("topo"));
+  refreshUI();
+}
+
+/* ================= DRAG TO MOVE ======================================= */
+let drag=null, raf=0, winBound=false;
+function svgPoint(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse()); }
+function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(()=>{raf=0;render();}); }
+function entity(id){ if(id.startsWith("plane:")) return model.mgmt.planes.find(p=>p.id===id.slice(6));
+  return model.devices.find(d=>d.id===id)||model.subnets.find(s=>s.id===id)||model.clouds.find(c=>c.id===id); }
+function bindDrag(svg){
+  svg.addEventListener("pointerdown",e=>{ const g=e.target.closest(".node"); if(!g) return;
+    drag={id:g.dataset.id}; g.style.cursor="grabbing"; e.preventDefault(); });
+  svg.addEventListener("dblclick",e=>{ const g=e.target.closest(".node"); if(!g) return;
+    const en=entity(g.dataset.id); if(en){delete en.x;delete en.y;render();} });   // dbl-click = reset to auto
+  if(winBound) return; winBound=true;
+  window.addEventListener("pointermove",e=>{ if(!drag) return; const svg=document.getElementById("topo"); if(!svg) return;
+    const loc=svgPoint(svg,e); const en=entity(drag.id); if(!en) return; en.x=loc.x; en.y=loc.y; scheduleRender(); });
+  window.addEventListener("pointerup",()=>{ drag=null; });
+}
+
+/* ================= PEN / ANNOTATION OVERLAY =========================== */
+let penColor=null, curStroke=null;
+function setPen(c){ penColor=c||null; const dr=document.getElementById("draw");
+  dr.style.pointerEvents=penColor?"auto":"none"; dr.style.cursor=penColor?"crosshair":"default";
+  document.querySelectorAll(".pentool").forEach(b=>b.classList.toggle("active",(b.dataset.color||"")===(penColor||""))); }
+function clearDrawing(){ const dr=document.getElementById("draw"); if(dr) dr.innerHTML=""; }
+function initDraw(){ const dr=document.getElementById("draw"); if(!dr) return;
+  dr.addEventListener("pointerdown",e=>{ if(!penColor) return; e.preventDefault();
+    const p=svgPoint(dr,e); const el=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    el.setAttribute("fill","none"); el.setAttribute("stroke",penColor); el.setAttribute("stroke-width","3");
+    el.setAttribute("stroke-linecap","round"); el.setAttribute("stroke-linejoin","round");
+    curStroke={el,pts:[[p.x,p.y]]}; el.setAttribute("points",`${p.x},${p.y}`); dr.appendChild(el); });
+  window.addEventListener("pointermove",e=>{ if(!curStroke) return; const p=svgPoint(dr,e);
+    curStroke.pts.push([p.x,p.y]); curStroke.el.setAttribute("points",curStroke.pts.map(a=>a.join(",")).join(" ")); });
+  window.addEventListener("pointerup",()=>{ curStroke=null; });
+}
+
+/* ================= EDIT ACTIONS ======================================= */
+function opts(list,ph){ return (ph?`<option value="">${ph}</option>`:"")+list.map(d=>`<option value="${d.id}">${esc(d.label)}</option>`).join(""); }
+function refreshUI(){
+  const all=model.devices;
+  document.getElementById("d-connto").innerHTML=opts(all,"— none —");
+  document.getElementById("c-from").innerHTML=opts(all);
+  document.getElementById("c-to").innerHTML=opts(all);
+  const vcgOpts=[]; model.mgmt.planes.forEach(pl=>pl.services.forEach(sv=>{ if(sv.type==="vcg") vcgOpts.push(`<option value="svc:${sv.id}">${esc(sv.label)} (VCG)</option>`); }));
+  document.getElementById("cl-anchor").innerHTML=opts(all)+vcgOpts.join("");
+  document.getElementById("su-anchor").innerHTML=opts(all);
+  document.getElementById("m-plane").innerHTML=model.mgmt.planes.map(p=>`<option value="${p.id}">${esc(p.label)}</option>`).join("");
+  document.getElementById("link-list").innerHTML=model.links.map(l=>{
+    const t=TR[l.transport]||TR.direct;
+    return `<li><span>${esc(dev(l.from)?.label||"?")} → ${esc(dev(l.to)?.label||"?")} <span class="tag" style="background:${t.c}">${t.t}</span></span><span class="x" onclick="delLink('${l.id}')">✕</span></li>`;
+  }).join("")||`<li style="color:#9ca3af">no links yet</li>`;
+  renderElements();
+}
+function anchorLabel(id){ if(id&&id.startsWith("svc:")){ for(const pl of model.mgmt.planes){ const s=pl.services.find(v=>"svc:"+v.id===id); if(s) return s.label+" (VCG)"; } return "?"; } return dev(id)?.label||"?"; }
+const SVCLABEL={vcg:"VCG",vco:"VCO",syslog:"other"};
+const SVCCOLOR={vcg:"#2b9fd8",vco:"#57bf5b",syslog:"#6b7280"};
+function row(label,tag,tagColor,tagClick,edit,del){
+  return `<li><span>${esc(label)} <span class="tag" style="background:${tagColor}" ${tagClick?`onclick="${tagClick}"`:''}>${esc(tag)}</span></span>`
+    +`<span><span class="ed" onclick="${edit}">✎</span><span class="x" onclick="${del}">✕</span></span></li>`;
+}
+function renderElements(){
+  let h="";
+  const hs=model.devices.filter(d=>d.kind==="hub"), sp=model.devices.filter(d=>d.kind==="spoke");
+  const devRows=list=>list.map(d=>row(d.label+(d.cloud?" · "+d.cloud.toUpperCase():""),d.kind,d.kind==="hub"?"#57bf5b":"#2b9fd8",`toggleKind('${d.id}')`,`editDevice('${d.id}')`,`delDevice('${d.id}')`)).join("");
+  h+=`<div class="grp">Hubs</div><ul class="links">${hs.length?devRows(hs):'<li class="muted">none</li>'}</ul>`;
+  h+=`<div class="grp">Spokes</div><ul class="links">${sp.length?devRows(sp):'<li class="muted">none</li>'}</ul>`;
+  h+=`<div class="grp">Subnets</div><ul class="links">${model.subnets.length?model.subnets.map(su=>row(`${su.cidr} → ${dev(su.anchor)?.label||'?'}`,"subnet","#2f80c9",null,`editSubnet('${su.id}')`,`delSubnet('${su.id}')`)).join(""):'<li class="muted">none</li>'}</ul>`;
+  h+=`<div class="grp">Cloud connections</div><ul class="links">${model.clouds.length?model.clouds.map(c=>row(`${(c.provider||'').toUpperCase()} ${c.cidr} → ${anchorLabel(c.anchor)}`,c.provider,"#e0a94b",`cycleProvider('${c.id}')`,`editCloud('${c.id}')`,`delCloud('${c.id}')`)).join(""):'<li class="muted">none</li>'}</ul>`;
+  model.mgmt.planes.forEach(pl=>{
+    h+=`<div class="grp">${esc(pl.label)}</div><ul class="links">${pl.services.length?pl.services.map((sv,i)=>row(`${sv.label} · ${sv.ip||''}`,SVCLABEL[sv.type]||sv.type,SVCCOLOR[sv.type]||"#6b7280",`cycleSvc('${pl.id}',${i})`,`editService('${pl.id}',${i})`,`delService('${pl.id}',${i})`)).join(""):'<li class="muted">none</li>'}</ul>`;
+  });
+  document.getElementById("elements").innerHTML=h;
+}
+function uid(p){ return p+Math.random().toString(36).slice(2,7); }
+function addDevice(kind){
+  const base=kind==="hub"?"Hub":"Spoke";
+  const name=document.getElementById("d-name").value.trim()||(base+(model.devices.filter(d=>d.kind===kind).length+1));
+  const id=uid("d"), cloud=document.getElementById("d-cloud").value||undefined;
+  model.devices.push({id,kind,label:name,cloud});
+  const cidr=document.getElementById("d-cidr").value.trim();
+  if(cidr) model.subnets.push({id:uid("s"),anchor:id,cidr});
+  const to=document.getElementById("d-connto").value;
+  if(to) model.links.push({id:uid("l"),from:id,to,transport:document.getElementById("d-conntr").value});
+  ["d-name","d-cidr"].forEach(i=>document.getElementById(i).value="");
+  render();
+}
+function nextSubnetCidr(){ let n=1; const used=new Set(model.subnets.map(s=>s.cidr));
+  while(used.has(`10.0.${n}.0/24`)) n++; return `10.0.${n}.0/24`; }
+function addLink(){
+  const from=document.getElementById("c-from").value, to=document.getElementById("c-to").value;
+  if(!from||!to||from===to) return alert("Pick two different devices.");
+  model.links.push({id:uid("l"),from,to,transport:document.getElementById("c-tr").value});
+  render();
+}
+function delLink(id){ model.links=model.links.filter(l=>l.id!==id); render(); }
+function addCloud(){
+  const anchor=document.getElementById("cl-anchor").value; if(!anchor) return alert("Add a device first.");
+  model.clouds.push({id:uid("c"),anchor,provider:document.getElementById("cl-prov").value,
+    cidr:document.getElementById("cl-cidr").value.trim()||"10.0.0.0/16"});
+  render();
+}
+// ---- subnets ----
+function addSubnet(){
+  const anchor=document.getElementById("su-anchor").value; if(!anchor) return alert("Add a device first.");
+  model.subnets.push({id:uid("s"),anchor,cidr:document.getElementById("su-cidr").value.trim()||nextSubnetCidr()});
+  document.getElementById("su-cidr").value=""; render();
+}
+function editSubnet(id){ const su=model.subnets.find(x=>x.id===id); if(!su) return;
+  const cidr=prompt("Subnet CIDR:",su.cidr); if(cidr===null) return;
+  const anchor=prompt("Attach to device (name):",dev(su.anchor)?.label||"");
+  if(anchor!==null){ const m=model.devices.find(d=>d.label.toLowerCase()===anchor.trim().toLowerCase()); if(m) su.anchor=m.id; }
+  su.cidr=cidr.trim()||su.cidr; render(); }
+function delSubnet(id){ model.subnets=model.subnets.filter(s=>s.id!==id); render(); }
+// ---- management services (per plane) ----
+const plane=id=>model.mgmt.planes.find(p=>p.id===id);
+function addService(){
+  const pl=plane(document.getElementById("m-plane").value); if(!pl) return;
+  const type=document.getElementById("m-type").value;
+  const label=(document.getElementById("m-label").value||SVCLABEL[type]||"node").trim();
+  pl.services.push({id:uid("sv"),label,ip:document.getElementById("m-ip").value.trim(),type});
+  document.getElementById("m-label").value=""; document.getElementById("m-ip").value=""; render();
+}
+function editService(pid,i){ const sv=plane(pid)?.services[i]; if(!sv) return;
+  const l=prompt("Label:",sv.label); if(l===null) return; const ip=prompt("IP:",sv.ip||""); if(ip===null) return;
+  sv.label=l.trim()||sv.label; sv.ip=ip.trim(); render(); }
+function delService(pid,i){ plane(pid)?.services.splice(i,1); render(); }
+function cycleSvc(pid,i){ const sv=plane(pid)?.services[i]; if(!sv) return; const order=["vcg","vco","syslog"];
+  sv.type=order[(order.indexOf(sv.type)+1)%order.length]; render(); }
+// ---- device edit/delete ----
+function editDevice(id){ const d=dev(id); if(!d) return;
+  const n=prompt("Name:",d.label); if(n===null) return;
+  const c=prompt("Hosted in (on-prem / aws / azure / gcp):", d.cloud||"on-prem");
+  if(c!==null){ const v=c.trim().toLowerCase(); d.cloud=["aws","azure","gcp"].includes(v)?v:undefined; }
+  d.label=n.trim()||d.label; render(); }
+function toggleKind(id){ const d=dev(id); if(d){ d.kind=d.kind==="hub"?"spoke":"hub"; render(); } }
+function delDevice(id){ const d=dev(id); if(!d) return;
+  if(!confirm(`Delete ${d.label} and its links/subnets/clouds?`)) return;
+  model.devices=model.devices.filter(x=>x.id!==id);
+  model.links=model.links.filter(l=>l.from!==id&&l.to!==id);
+  model.subnets=model.subnets.filter(s=>s.anchor!==id);
+  model.clouds=model.clouds.filter(c=>c.anchor!==id);
+  render(); }
+// ---- cloud edit/delete ----
+function editCloud(id){ const c=model.clouds.find(x=>x.id===id); if(!c) return;
+  const p=prompt("Provider (aws / azure / gcp):",c.provider); if(p===null) return;
+  const cidr=prompt("CIDR:",c.cidr); if(cidr===null) return;
+  c.provider=p.trim().toLowerCase()||c.provider; c.cidr=cidr.trim()||c.cidr; render(); }
+function cycleProvider(id){ const c=model.clouds.find(x=>x.id===id); const order=["aws","azure","gcp"];
+  c.provider=order[(order.indexOf(c.provider)+1)%order.length]; render(); }
+function delCloud(id){ model.clouds=model.clouds.filter(c=>c.id!==id); render(); }
+
+function resetModel(){ model=referenceModel(); render(); }
+function blankModel(){ return {devices:[],links:[],subnets:[],clouds:[],
+  mgmt:{planes:[{id:"mp",label:"Management Plane",services:[]},{id:"cdp",label:"Control and Data Plane",services:[]}]}}; }
+function clearCanvas(){ if(!confirm("Clear the canvas? This removes all devices and connections.")) return;
+  model=blankModel(); render(); }
+
+/* ================= EXPORTS ============================================= */
+function download(name,text){ const b=new Blob([text],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; a.click(); }
+function downloadJSON(){ download("topology.json",JSON.stringify(model,null,2)); }
+function toLucid(){
+  const pos=computeGeometry(), shapes=[], lines=[]; let n=0;
+  Object.entries(pos).forEach(([id,p])=>{
+    let text=p.node?.label||p.node?.cidr||p.pl?.label||p.svc?.label||id, fill=p.kind==="hub"?"#57bf5b":p.kind==="spoke"?"#2b9fd8":p.ptype==="cloud"?"#fff4e0":p.ptype==="svc"?"#dbeafe":"#eaf4ff";
+    shapes.push({id,type:"rectangle",boundingBox:{x:Math.round(p.x-75),y:Math.round(p.y-30),w:150,h:60},
+      style:{fill:{type:"color",color:fill}},text:String(text)});
+  });
+  const line=(a,b)=>{ if(pos[a]&&pos[b]) lines.push({id:"ln"+(n++),
+    endpoint1:{type:"shapeEndpoint",style:"none",shapeId:a},endpoint2:{type:"shapeEndpoint",style:"arrow",shapeId:b}}); };
+  model.links.forEach(l=>line(l.from,l.to));
+  model.subnets.forEach(s=>line(s.anchor,s.id));
+  model.clouds.forEach(c=>line(c.anchor,c.id));
+  return {version:1,pages:[{id:"page1",title:"Network HLD",shapes,lines}]};
+}
+function downloadLucid(){ download("document.json",JSON.stringify(toLucid(),null,2));
+  alert("Saved document.json.\n\nTo import: zip it as topology.lucid (document.json at root),\nthen POST to Lucid's Create Document with Standard Import File endpoint (product=lucidchart)."); }
+
+render();
+initDraw();
+</script>
+</body>
+</html>
