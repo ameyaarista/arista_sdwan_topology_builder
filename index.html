@@ -519,9 +519,10 @@ function render(){
   if(!isFinite(minX)){ minX=0;minY=0;maxX=560;maxY=360; }
   minX-=30; minY-=30; maxX+=30; maxY+=40;
   const W=maxX-minX, H=maxY-minY;
-  if(!model.devices.length)
+  const hasContent = model.devices.length || model.subnets.length || model.clouds.length || model.mgmt.planes.some(pl=>pl.services.length);
+  if(!hasContent)
     s+=`<text x="${minX+W/2}" y="${minY+H/2-10}" text-anchor="middle" font-size="16" fill="#9ca3af">Blank canvas</text>`
-      +`<text x="${minX+W/2}" y="${minY+H/2+14}" text-anchor="middle" font-size="12" fill="#c0c4cc">Add a hub or spoke from the left panel to begin</text>`;
+      +`<text x="${minX+W/2}" y="${minY+H/2+14}" text-anchor="middle" font-size="12" fill="#c0c4cc">Add a device from the left panel to begin</text>`;
   lastBounds={minX,minY,W,H};
   const zW=W*zoom, zH=H*zoom;                               // pixel size scaled by zoom (viewBox stays in model units)
   document.getElementById("topo-holder").innerHTML=`<svg id="topo" width="${zW}" height="${zH}" viewBox="${minX} ${minY} ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
