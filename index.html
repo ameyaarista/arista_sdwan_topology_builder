@@ -22,6 +22,7 @@
   .gutter:hover,.gutter.dragging{background:#c7ccd4}
   .canvas{flex:1;overflow:auto;background:#fff;position:relative;display:flex}
   #stage{position:relative;margin:auto}
+  .marquee{position:absolute;border:1.5px dashed #2563eb;background:rgba(37,99,235,.08);pointer-events:none;z-index:5}
   #draw{position:absolute;top:0;left:0;pointer-events:none}
   #pen-tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
   .pentool{width:20px;height:20px;border-radius:5px;border:2px solid #e5e7eb;background:var(--c,#fff);cursor:pointer;padding:0;line-height:1}
@@ -391,6 +392,11 @@ function render(){
   model.links.forEach(l=>{ const a=pos[l.from],b=pos[l.to]; if(a&&b) s+=linkLine(a,b,l.transport); });
   model.subnets.forEach(su=>{ const a=pos[su.anchor],p=pos[su.id]; if(a&&p) s+=linkLine(a,{x:p.x,y:p.y+(p.y<a.y?18:-18)},"direct").split("<rect")[0]; });
   model.clouds.forEach(c=>{ const a=pos[c.anchor],p=pos[c.id]; if(a&&p) s+=`<line x1="${a.x}" y1="${a.y}" x2="${p.x}" y2="${p.y+(p.y<a.y?26:-26)}" stroke="var(--cloud-b)" stroke-width="2"/>`; });
+  // selection halos (under nodes)
+  selected.forEach(id=>{ const p=pos[id]; if(!p) return;
+    const hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="cloud"?86:(p.kind?50:64);
+    const hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="cloud"?38:(p.kind?52:24);
+    s+=`<rect x="${p.x-hw}" y="${p.y-hh}" width="${hw*2}" height="${hh*2}" rx="10" fill="rgba(37,99,235,.08)" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 3"/>`; });
   // management planes — dotted rects, positions from layout
   model.mgmt.planes.forEach(pl=>{ const P=pos["plane:"+pl.id]; if(!P) return; const top=P.y-P.mH/2;
     let mg=`<rect x="${P.x-P.mW/2}" y="${top}" width="${P.mW}" height="${P.mH}" rx="8" fill="var(--mgmt)" stroke="var(--mgmt-b)" stroke-width="1.5" stroke-dasharray="7 5"/>`
@@ -430,23 +436,66 @@ function render(){
   refreshUI();
 }
 
-/* ================= DRAG TO MOVE ======================================= */
+/* ================= DRAG / SELECT / MARQUEE ============================= */
 let drag=null, raf=0, winBound=false;
+let selected=new Set();      // ids of selected nodes (supports group move)
+let marquee=null;            // active rubber-band selection
 function svgPoint(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
   return p.matrixTransform(svg.getScreenCTM().inverse()); }
 function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(()=>{raf=0;render();}); }
 function entity(id){ if(id.startsWith("plane:")) return model.mgmt.planes.find(p=>p.id===id.slice(6));
   return model.devices.find(d=>d.id===id)||model.subnets.find(s=>s.id===id)||model.clouds.find(c=>c.id===id); }
+function selectableIds(){ return [
+  ...model.devices.map(d=>d.id), ...model.subnets.map(s=>s.id),
+  ...model.clouds.map(c=>c.id), ...model.mgmt.planes.map(p=>"plane:"+p.id) ]; }
 function bindDrag(svg){
-  svg.addEventListener("pointerdown",e=>{ const g=e.target.closest(".node"); if(!g) return;
-    drag={id:g.dataset.id}; g.style.cursor="grabbing"; e.preventDefault(); });
+  svg.addEventListener("pointerdown",e=>{
+    const g=e.target.closest(".node");
+    if(g){
+      const id=g.dataset.id;
+      if(e.shiftKey){ selected.has(id)?selected.delete(id):selected.add(id); render(); return; }
+      if(!selected.has(id)) selected=new Set([id]);       // fresh single selection
+      const geo=computeGeometry(), start={};
+      selected.forEach(sid=>{ const gp=geo[sid]; if(gp) start[sid]={x:gp.x,y:gp.y}; });
+      drag={ids:[...selected], start, startLoc:svgPoint(svg,e)};
+      g.style.cursor="grabbing"; render(); e.preventDefault();
+    } else if(!penColor){
+      startMarquee(e);                                     // empty canvas -> rubber-band
+    }
+  });
   svg.addEventListener("dblclick",e=>{ const g=e.target.closest(".node"); if(!g) return;
     const en=entity(g.dataset.id); if(en){delete en.x;delete en.y;render();} });   // dbl-click = reset to auto
   if(winBound) return; winBound=true;
-  window.addEventListener("pointermove",e=>{ if(!drag) return; const svg=document.getElementById("topo"); if(!svg) return;
-    const loc=svgPoint(svg,e); const en=entity(drag.id); if(!en) return; en.x=loc.x; en.y=loc.y; scheduleRender(); });
-  window.addEventListener("pointerup",()=>{ drag=null; });
+  window.addEventListener("pointermove",e=>{
+    if(drag){ const svg=document.getElementById("topo"); if(!svg) return;
+      const loc=svgPoint(svg,e), dx=loc.x-drag.startLoc.x, dy=loc.y-drag.startLoc.y;
+      drag.ids.forEach(id=>{ const en=entity(id), s=drag.start[id]; if(en&&s){ en.x=s.x+dx; en.y=s.y+dy; } });
+      scheduleRender(); return; }
+    if(marquee) updateMarquee(e);
+  });
+  window.addEventListener("pointerup",()=>{ if(marquee) endMarquee(); drag=null; });
 }
+function startMarquee(e){
+  if(!e.shiftKey) selected=new Set();
+  const canvas=document.querySelector('.canvas');
+  const div=document.createElement('div'); div.className='marquee'; canvas.appendChild(div);
+  marquee={x0:e.clientX,y0:e.clientY,div,canvas,base:new Set(selected)};
+  updateMarquee(e);
+}
+function updateMarquee(e){
+  const {x0,y0,div,canvas,base}=marquee, r=canvas.getBoundingClientRect();
+  const x=Math.min(x0,e.clientX), y=Math.min(y0,e.clientY), w=Math.abs(e.clientX-x0), h=Math.abs(e.clientY-y0);
+  div.style.left=(x-r.left+canvas.scrollLeft)+'px'; div.style.top=(y-r.top+canvas.scrollTop)+'px';
+  div.style.width=w+'px'; div.style.height=h+'px';
+  const svg=document.getElementById('topo'); if(!svg) return;
+  const p1=svgPoint(svg,{clientX:x0,clientY:y0}), p2=svgPoint(svg,{clientX:e.clientX,clientY:e.clientY});
+  const minX=Math.min(p1.x,p2.x),maxX=Math.max(p1.x,p2.x),minY=Math.min(p1.y,p2.y),maxY=Math.max(p1.y,p2.y);
+  const geo=computeGeometry(), sel=new Set(base);
+  selectableIds().forEach(id=>{ const gp=geo[id]; if(gp&&gp.x>=minX&&gp.x<=maxX&&gp.y>=minY&&gp.y<=maxY) sel.add(id); });
+  selected=sel; scheduleRender();
+}
+function endMarquee(){ if(!marquee) return; marquee.div.remove(); marquee=null; render(); }
+function clearSelection(){ if(selected.size){ selected=new Set(); render(); } }
 
 /* ================= PEN / ANNOTATION OVERLAY =========================== */
 let penColor=null, curStroke=null;
@@ -626,6 +675,8 @@ function initResize(){
     g.addEventListener('dblclick',()=>{ panel.style.width='320px'; panel.style.minWidth='220px'; render(); }); // dbl-click resets
   });
 }
+
+window.addEventListener("keydown",e=>{ if(e.key==="Escape") clearSelection(); });
 
 render();
 initDraw();
