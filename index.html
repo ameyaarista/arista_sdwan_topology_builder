@@ -40,6 +40,7 @@
   button{cursor:pointer;border:none;border-radius:6px;padding:8px 12px;font-size:13px;font-weight:500}
   .btn{color:#fff;width:100%;margin-top:10px}
   .btn.hub{background:#1f6bb0}.btn.spoke{background:#2f80c9}.btn.link{background:#159957}
+  .btn.cluster{background:#2f855a;width:100%;margin-top:8px}
   .btn.add{background:#4b5563}
   .btn.sec{background:#eef2f7;color:#1f2937}
   .btn:hover{filter:brightness(.96)}
@@ -145,6 +146,7 @@
         <button class="btn hub" onclick="addDevice('hub')">+ Add hub</button>
         <button class="btn spoke" onclick="addDevice('spoke')">+ Add spoke</button>
       </div>
+      <button class="btn cluster" onclick="addDevice('cluster')">+ Add cluster</button>
     </div>
 
     <div class="section">
@@ -267,12 +269,13 @@ function referenceModel(){
 }
 let model = referenceModel();
 const dev = id => model.devices.find(d=>d.id===id);
-const hubs = () => model.devices.filter(d=>d.kind==="hub");
+const isCore = k => k==="hub" || k==="cluster";       // "core" nodes sit in the top tier
+const hubs = () => model.devices.filter(d=>isCore(d.kind));
 const spokes = () => model.devices.filter(d=>d.kind==="spoke");
-function primaryHub(sp){                       // hub this spoke first connects to
+function primaryHub(sp){                       // core node this spoke first connects to
   for(const l of model.links){
-    if(l.from===sp.id && dev(l.to)?.kind==="hub") return l.to;
-    if(l.to===sp.id   && dev(l.from)?.kind==="hub") return l.from;
+    if(l.from===sp.id && isCore(dev(l.to)?.kind)) return l.to;
+    if(l.to===sp.id   && isCore(dev(l.from)?.kind)) return l.from;
   }
   return null;
 }
@@ -290,7 +293,7 @@ function computeGeometry(){
     const grp=byHub[h.id]||[];
     const width=Math.max(1,grp.length)*G.dxSpoke;
     const hx=cursor+width/2;
-    pos[h.id]={x:hx,y:G.hubY,kind:"hub",node:h};
+    pos[h.id]={x:hx,y:G.hubY,kind:h.kind,node:h};
     grp.forEach((s,i)=>{ pos[s.id]={x:hx-(grp.length-1)*G.dxSpoke/2+i*G.dxSpoke, y:G.hubY+G.spokeGap, kind:"spoke", node:s}; });
     cursor+=Math.max(width,180)+G.hubGap;
   });
@@ -337,8 +340,8 @@ function computeGeometry(){
 /* ================= RENDER ============================================== */
 const esc=s=>String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 const TR={sdwan:{c:"var(--sdwan)",t:"SD-WAN",dash:""},ipsec:{c:"var(--ipsec)",t:"IPsec",dash:'stroke-dasharray="6 4"'},direct:{c:"var(--direct)",t:"Direct",dash:""},interconnect:{c:"var(--interconnect)",t:"Interconnect",dash:""}};
-// hub-to-hub links are shown as "Interconnect" regardless of transport
-function linkStyleKey(l){ return (dev(l.from)?.kind==="hub" && dev(l.to)?.kind==="hub") ? "interconnect" : l.transport; }
+// links between two core nodes (hub↔hub, cluster↔cluster, hub↔cluster) are shown as "Interconnect"
+function linkStyleKey(l){ return (isCore(dev(l.from)?.kind) && isCore(dev(l.to)?.kind)) ? "interconnect" : l.transport; }
 
 function linkLine(a,b,tr){
   const s=TR[tr]||TR.direct; const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
@@ -393,7 +396,17 @@ function vcoIcon(cx,cy,r){
   g+=`<circle cx="${f(cx+0.1*r)}" cy="${f(cy+0.03*r)}" r="${f(0.06*r)}" fill="#fff" stroke="${gr}" stroke-width="${f(0.03*r)}"/>`;
   return g;
 }
+function clusterNode(p){
+  const r=24, dx=32, padX=dx+r+12, padY=r+14;
+  const lbl=esc(p.node.label), w=lbl.length*7.6+12, ly=p.y+padY+16;
+  let g=`<rect x="${p.x-padX}" y="${p.y-padY}" width="${2*padX}" height="${2*padY}" rx="12" fill="#fff" stroke="#9aa0a6" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  g+=edgeIcon(p.x-dx,p.y,r,"var(--hub)")+edgeIcon(p.x+dx,p.y,r,"var(--hub)");
+  g+=`<rect x="${p.x-w/2}" y="${ly-12}" width="${w}" height="17" rx="3" fill="#fff" opacity="0.92"/>`
+    +`<text x="${p.x}" y="${ly+1}" text-anchor="middle" font-size="13" font-weight="600" fill="#7c3aed">${lbl}</text>`;
+  return g;
+}
 function deviceNode(p){
+  if(p.kind==="cluster") return clusterNode(p);
   const isHub=p.kind==="hub", fill=isHub?"var(--hub)":"var(--spoke)", r=isHub?38:32;
   const ly=isHub?p.y-r-14:p.y+r+20;              // hub label above, spoke label below — clear of links
   const lbl=esc(p.node.label), w=lbl.length*7.6+12;
@@ -442,8 +455,8 @@ function render(){
   // selection halos (under nodes) + delete badges (collected, drawn on top)
   let selBadges="";
   selected.forEach(id=>{ const p=pos[id]; if(!p) return;
-    const hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="cloud"?86:(p.kind?50:64);
-    const hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="cloud"?38:(p.kind?52:24);
+    const hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="cloud"?86:(p.kind==="cluster"?74:p.kind?50:64);
+    const hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="cloud"?38:(p.kind==="cluster"?46:p.kind?52:24);
     s+=`<rect x="${p.x-hw}" y="${p.y-hh}" width="${hw*2}" height="${hh*2}" rx="10" fill="rgba(37,99,235,.08)" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 3"/>`;
     if(dev(id)||model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)){
       const bx=p.x+hw-4, by=p.y-hh+10;
@@ -476,8 +489,8 @@ function render(){
   // bounds -> viewBox (allows negative coords for clouds above planes)
   let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
   Object.values(pos).forEach(p=>{
-    const hw=p.ptype==="plane"?p.mW/2:p.ptype==="cloud"?80:(p.kind?60:80);
-    const hh=p.ptype==="plane"?p.mH/2:p.ptype==="cloud"?32:(p.kind?66:30);
+    const hw=p.ptype==="plane"?p.mW/2:p.ptype==="cloud"?80:(p.kind==="cluster"?74:p.kind?60:80);
+    const hh=p.ptype==="plane"?p.mH/2:p.ptype==="cloud"?32:(p.kind==="cluster"?52:p.kind?66:30);
     minX=Math.min(minX,p.x-hw); maxX=Math.max(maxX,p.x+hw);
     minY=Math.min(minY,p.y-hh); maxY=Math.max(maxY,p.y+hh); });
   if(!isFinite(minX)){ minX=0;minY=0;maxX=560;maxY=360; }
@@ -614,9 +627,11 @@ function row(label,tag,tagColor,tagClick,edit,del){
 }
 function renderElements(){
   let h="";
-  const hs=model.devices.filter(d=>d.kind==="hub"), sp=model.devices.filter(d=>d.kind==="spoke");
-  const devRows=list=>list.map(d=>row(d.label+(d.cloud?" · "+d.cloud.toUpperCase():""),d.kind,d.kind==="hub"?"#57bf5b":"#2b9fd8",`toggleKind('${d.id}')`,`editDevice('${d.id}')`,`delDevice('${d.id}')`)).join("");
+  const hs=model.devices.filter(d=>d.kind==="hub"), sp=model.devices.filter(d=>d.kind==="spoke"), cl=model.devices.filter(d=>d.kind==="cluster");
+  const kindColor=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":"#2b9fd8";
+  const devRows=list=>list.map(d=>row(d.label+(d.cloud?" · "+d.cloud.toUpperCase():""),d.kind,kindColor(d.kind),`toggleKind('${d.id}')`,`editDevice('${d.id}')`,`delDevice('${d.id}')`)).join("");
   h+=`<div class="grp">Hubs</div><ul class="links">${hs.length?devRows(hs):'<li class="muted">none</li>'}</ul>`;
+  h+=`<div class="grp">Clusters</div><ul class="links">${cl.length?devRows(cl):'<li class="muted">none</li>'}</ul>`;
   h+=`<div class="grp">Spokes</div><ul class="links">${sp.length?devRows(sp):'<li class="muted">none</li>'}</ul>`;
   h+=`<div class="grp">Subnets</div><ul class="links">${model.subnets.length?model.subnets.map(su=>row(`${su.cidr} → ${dev(su.anchor)?.label||'?'}`,"subnet","#2f80c9",null,`editSubnet('${su.id}')`,`delSubnet('${su.id}')`)).join(""):'<li class="muted">none</li>'}</ul>`;
   h+=`<div class="grp">Cloud connections</div><ul class="links">${model.clouds.length?model.clouds.map(c=>row(`${(c.provider||'').toUpperCase()} ${c.cidr} → ${anchorLabel(c.anchor)}`,c.provider,"#e0a94b",`cycleProvider('${c.id}')`,`editCloud('${c.id}')`,`delCloud('${c.id}')`)).join(""):'<li class="muted">none</li>'}</ul>`;
@@ -667,7 +682,7 @@ function renderChecks(){ const el=document.getElementById("checks"); if(!el) ret
 function uid(p){ return p+Math.random().toString(36).slice(2,7); }
 function addDevice(kind){
   pushUndo();
-  const base=kind==="hub"?"Hub":"Spoke";
+  const base=kind==="hub"?"Hub":kind==="cluster"?"Cluster":"Spoke";
   const name=document.getElementById("d-name").value.trim()||(base+(model.devices.filter(d=>d.kind===kind).length+1));
   const id=uid("d"), cloud=document.getElementById("d-cloud").value||undefined;
   model.devices.push({id,kind,label:name,cloud});
@@ -730,7 +745,7 @@ function editDevice(id){ const d=dev(id); if(!d) return;
   const c=prompt("Hosted in (on-prem / aws / azure / gcp):", d.cloud||"on-prem");
   if(c!==null){ const v=c.trim().toLowerCase(); d.cloud=["aws","azure","gcp"].includes(v)?v:undefined; }
   d.label=n.trim()||d.label; render(); }
-function toggleKind(id){ const d=dev(id); if(d){ pushUndo(); d.kind=d.kind==="hub"?"spoke":"hub"; render(); } }
+function toggleKind(id){ const d=dev(id); if(d){ pushUndo(); const order=["hub","spoke","cluster"]; d.kind=order[(order.indexOf(d.kind)+1)%order.length]; render(); } }
 function delDevice(id){ const d=dev(id); if(!d) return;
   if(!confirm(`Delete ${d.label} and its links/subnets/clouds?`)) return;
   pushUndo();
