@@ -69,6 +69,10 @@
   .chk.err{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
   .chk.ok{background:#dcfce7;color:#166534;border:1px solid #86efac}
   .chk b{font-weight:600}
+  .palette{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .pal-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 3px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:10px;color:#374151;font-weight:500;line-height:1.1;text-align:center}
+  .pal-btn:hover{background:#f3f4f6;border-color:#c7ccd4}
+  .pal-btn svg{display:block;height:28px}
   .tag{font-size:10px;padding:1px 6px;border-radius:10px;color:#fff}
   svg{display:block}
 </style>
@@ -121,24 +125,8 @@
 
     <div class="section">
       <h2>Add device</h2>
-      <div class="row">
-        <div><label>Name</label><input id="d-name" placeholder="Hub1 / Spoke1"></div>
-        <div><label>Hosted in</label>
-          <select id="d-cloud">
-            <option value="">On-prem</option>
-            <option value="aws">AWS</option>
-            <option value="azure">Azure</option>
-            <option value="gcp">GCP</option>
-          </select>
-        </div>
-      </div>
-      <label>Host subnet CIDR (optional)</label>
-      <input id="d-cidr" placeholder="10.0.1.0/24">
-      <div class="row">
-        <button class="btn hub" onclick="addDevice('hub')">+ Add hub</button>
-        <button class="btn spoke" onclick="addDevice('spoke')">+ Add spoke</button>
-      </div>
-      <button class="btn cluster" onclick="addDevice('cluster')">+ Add cluster</button>
+      <div id="palette" class="palette"></div>
+      <div class="hint">Click an icon to add it to the topology.</div>
     </div>
 
     <div class="section">
@@ -675,16 +663,41 @@ function renderChecks(){ const el=document.getElementById("checks"); if(!el) ret
     : `<div class="chk ok">No issues found — topology looks clean.</div>`;
 }
 function uid(p){ return p+Math.random().toString(36).slice(2,7); }
-function addDevice(kind){
+function addDevice(kind,cloud){
   pushUndo();
   const base=kind==="hub"?"Hub":kind==="cluster"?"Cluster":"Spoke";
-  const name=document.getElementById("d-name").value.trim()||(base+(model.devices.filter(d=>d.kind===kind).length+1));
-  const id=uid("d"), cloud=document.getElementById("d-cloud").value||undefined;
-  model.devices.push({id,kind,label:name,cloud});
-  const cidr=document.getElementById("d-cidr").value.trim();
-  if(cidr) model.subnets.push({id:uid("s"),anchor:id,cidr});
-  ["d-name","d-cidr"].forEach(i=>document.getElementById(i).value="");
+  const name=base+(model.devices.filter(d=>d.kind===kind).length+1);
+  model.devices.push({id:uid("d"),kind,label:name,cloud:cloud||undefined});
   render();
+}
+function addMgmt(type){                                   // quick-add VCO / VCG from the palette
+  const pl = type==="vcg"
+    ? (plane("cdp")||model.mgmt.planes.find(p=>/control.*data/i.test(p.label))||model.mgmt.planes[0])
+    : (plane("mp")||model.mgmt.planes[0]);
+  if(!pl) return; pushUndo();
+  const n=pl.services.filter(s=>s.type===type).length+1;
+  pl.services.push({id:uid("sv"),label:(type==="vcg"?"GW":"VCO")+n,ip:"",type});
+  render();
+}
+function paletteSvg(vb,inner,w){ return `<svg viewBox="${vb}" width="${w||30}">${inner}</svg>`; }
+function spokeCloudIcon(prov){ return `<svg viewBox="0 0 28 28" width="30">${edgeIcon(14,14,11,'var(--spoke)')}`
+  +`<g transform="translate(20.5,7.5) scale(0.30)"><circle r="24" fill="#fff" stroke="#d0d5dd"/>${providerMark(0,0,prov)}</g></svg>`; }
+function buildPalette(){
+  const el=document.getElementById("palette"); if(!el) return;
+  const clusterIc=paletteSvg("0 0 46 28",
+    `<rect x="1" y="4" width="44" height="20" rx="5" fill="none" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="3 2"/>`
+    +edgeIcon(13,14,8,'var(--hub)')+edgeIcon(33,14,8,'var(--hub)'),40);
+  const items=[
+    ["Spoke","addDevice('spoke')",paletteSvg("0 0 28 28",edgeIcon(14,14,11,'var(--spoke)'))],
+    ["AWS Spoke","addDevice('spoke','aws')",spokeCloudIcon('aws')],
+    ["Azure Spoke","addDevice('spoke','azure')",spokeCloudIcon('azure')],
+    ["GCP Spoke","addDevice('spoke','gcp')",spokeCloudIcon('gcp')],
+    ["Hub","addDevice('hub')",paletteSvg("0 0 28 28",edgeIcon(14,14,11,'var(--hub)'))],
+    ["Cluster","addDevice('cluster')",clusterIc],
+    ["VCO","addMgmt('vco')",paletteSvg("0 0 28 28",vcoIcon(14,14,11))],
+    ["VCG","addMgmt('vcg')",paletteSvg("0 0 28 28",vcgIcon(14,14,11))],
+  ];
+  el.innerHTML=items.map(([label,act,ic])=>`<button class="pal-btn" onclick="${act}" title="Add ${label}">${ic}<span>${label}</span></button>`).join("");
 }
 function nextSubnetCidr(){ let n=1; const used=new Set(model.subnets.map(s=>s.cidr));
   while(used.has(`10.0.${n}.0/24`)) n++; return `10.0.${n}.0/24`; }
@@ -975,6 +988,7 @@ window.addEventListener("keydown",e=>{
 });
 
 buildResources();
+buildPalette();
 render();
 initDraw();
 initResize();
