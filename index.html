@@ -623,10 +623,9 @@ function editSelectedEntity(id){
 function deleteSelectedEntity(id){
   pushUndo();
   if(id.startsWith("plane:")){ const pid=id.slice(6), pl=model.mgmt.planes.find(p=>p.id===pid);
-    if(pl){ const svcIds=new Set(pl.services.map(s=>"svc:"+s.id));
-      model.links=model.links.filter(l=>!svcIds.has(l.from)&&!svcIds.has(l.to));
-      model.clouds=model.clouds.filter(c=>!svcIds.has(c.anchor));
-      model.mgmt.planes=model.mgmt.planes.filter(p=>p.id!==pid); }
+    if(pl){ const others=model.mgmt.planes.filter(p=>p.id!==pid);
+      if(others.length) others[0].services.push(...pl.services);   // keep the gateways/VCOs
+      model.mgmt.planes=others; }
   } else if(id.startsWith("svc:")){ const r=svcRef(id); if(r) r.pl.services.splice(r.i,1);
     model.links=model.links.filter(l=>l.from!==id&&l.to!==id); model.clouds=model.clouds.filter(c=>c.anchor!==id);
   } else if(dev(id)){                                       // device -> also drop its links/subnets/clouds
@@ -1101,10 +1100,9 @@ window.addEventListener("keydown",e=>{
     if(selectedLink){ e.preventDefault(); delLink(selectedLink); return; }
     if(selected.size){ e.preventDefault(); pushUndo(); [...selected].forEach(id=>{
       if(id.startsWith("plane:")){ const pid=id.slice(6), pl=model.mgmt.planes.find(p=>p.id===pid);
-        if(pl){ const svcIds=new Set(pl.services.map(s=>"svc:"+s.id));
-          model.links=model.links.filter(l=>!svcIds.has(l.from)&&!svcIds.has(l.to));
-          model.clouds=model.clouds.filter(c=>!svcIds.has(c.anchor));
-          model.mgmt.planes=model.mgmt.planes.filter(p=>p.id!==pid); } }
+        if(pl){ const others=model.mgmt.planes.filter(p=>p.id!==pid);
+          if(others.length) others[0].services.push(...pl.services);
+          model.mgmt.planes=others; } }
       else if(id.startsWith("svc:")){ const r=svcRef(id); if(r) r.pl.services.splice(r.i,1);
         model.links=model.links.filter(l=>l.from!==id&&l.to!==id); model.clouds=model.clouds.filter(c=>c.anchor!==id); }
       else if(dev(id)){ model.devices=model.devices.filter(x=>x.id!==id);
@@ -1122,7 +1120,7 @@ window.addEventListener("keydown",e=>{
 
 buildResources();
 buildPalette();
-const _saved=loadModel(); if(_saved) model=_saved;   // restore last session
+const _saved=loadModel(); model = _saved || TEMPLATES.multiregion.build();   // restore last session, else Multi-Region default
 render();
 initDraw();
 initResize();
