@@ -8,7 +8,7 @@
   :root{
     --hub:#57bf5b; --spoke:#2b9fd8; --subnet:#eaf4ff; --subnet-b:#2f80c9;
     --cloud:#fff4e0; --cloud-b:#e0a94b; --mgmt:#f4f4f4; --mgmt-b:#9aa0a6;
-    --sdwan:#159957; --ipsec:#d97706; --direct:#6b7280; --interconnect:#7c3aed; --text:#1f2937;
+    --sdwan:#159957; --ipsec:#d97706; --direct:#6b7280; --interconnect:#7c3aed; --firewall:#f4685f; --text:#1f2937;
   }
   *{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
   body{margin:0;background:#f7f8fa;color:var(--text)}
@@ -129,23 +129,6 @@
       <div class="hint">Click an icon to add it to the topology.</div>
     </div>
 
-    <div class="section">
-      <h2>SD-WAN Management node</h2>
-      <label>Plane</label>
-      <select id="m-plane"></select>
-      <label>Type</label>
-      <select id="m-type">
-        <option value="vco">VCO — Orchestrator</option>
-        <option value="vcg">VCG — Gateway</option>
-        <option value="syslog">Syslog / other</option>
-      </select>
-      <div class="row">
-        <div><label>Label</label><input id="m-label" placeholder="VCO / GW1"></div>
-        <div><label>IP</label><input id="m-ip" placeholder="172.16.23.x"></div>
-      </div>
-      <button class="btn add" onclick="addService()">+ Add management node</button>
-    </div>
-
   </aside>
 
   <div class="gutter" data-target="panel-left" data-side="left" title="Drag to resize"></div>
@@ -212,7 +195,7 @@ let model = referenceModel();
 const dev = id => model.devices.find(d=>d.id===id);
 const isCore = k => k==="hub" || k==="cluster";       // "core" nodes sit in the top tier
 const hubs = () => model.devices.filter(d=>isCore(d.kind));
-const spokes = () => model.devices.filter(d=>d.kind==="spoke");
+const spokes = () => model.devices.filter(d=>d.kind==="spoke"||d.kind==="firewall");   // leaf nodes (bottom tier)
 function primaryHub(sp){                       // core node this spoke first connects to
   for(const l of model.links){
     if(l.from===sp.id && isCore(dev(l.to)?.kind)) return l.to;
@@ -235,12 +218,12 @@ function computeGeometry(){
     const width=Math.max(1,grp.length)*G.dxSpoke;
     const hx=cursor+width/2;
     pos[h.id]={x:hx,y:G.hubY,kind:h.kind,node:h};
-    grp.forEach((s,i)=>{ pos[s.id]={x:hx-(grp.length-1)*G.dxSpoke/2+i*G.dxSpoke, y:G.hubY+G.spokeGap, kind:"spoke", node:s}; });
+    grp.forEach((s,i)=>{ pos[s.id]={x:hx-(grp.length-1)*G.dxSpoke/2+i*G.dxSpoke, y:G.hubY+G.spokeGap, kind:s.kind, node:s}; });
     cursor+=Math.max(width,180)+G.hubGap;
   });
-  // orphan spokes (not attached to a hub) sit in the spoke row on the left
-  orphan.forEach((s,i)=>{ pos[s.id]={x:G.startX+i*G.dxSpoke, y:G.hubY+G.spokeGap, kind:"spoke", node:s}; });
-  if(hubs().length===0) spokes().forEach((s,i)=>{ if(!pos[s.id]) pos[s.id]={x:G.startX+i*G.dxSpoke,y:G.hubY+G.spokeGap,kind:"spoke",node:s}; });
+  // orphan leaves (not attached to a core) sit in the lower row on the left
+  orphan.forEach((s,i)=>{ pos[s.id]={x:G.startX+i*G.dxSpoke, y:G.hubY+G.spokeGap, kind:s.kind, node:s}; });
+  if(hubs().length===0) spokes().forEach((s,i)=>{ if(!pos[s.id]) pos[s.id]={x:G.startX+i*G.dxSpoke,y:G.hubY+G.spokeGap,kind:s.kind,node:s}; });
 
   // manual drag overrides win over auto-layout
   model.devices.forEach(d=>{ if(d.x!=null&&d.y!=null&&pos[d.id]){pos[d.id].x=d.x;pos[d.id].y=d.y;} });
@@ -337,6 +320,28 @@ function vcoIcon(cx,cy,r){
   g+=`<circle cx="${f(cx+0.1*r)}" cy="${f(cy+0.03*r)}" r="${f(0.06*r)}" fill="#fff" stroke="${gr}" stroke-width="${f(0.03*r)}"/>`;
   return g;
 }
+// Firewall: coral disc, white brick wall + flame
+function firewallIcon(cx,cy,r,fill){
+  const f=n=>n.toFixed(1), sw=Math.max(1,r*0.05).toFixed(2);
+  let g=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"/>`;
+  const x0=cx-0.5*r, x1=cx+0.44*r, y0=cy-0.34*r, y1=cy+0.34*r, rows=4, rh=(y1-y0)/rows, w=x1-x0;
+  g+=`<g stroke="#fff" stroke-width="${sw}" fill="none" stroke-linecap="round">`;
+  for(let i=0;i<=rows;i++){ const y=y0+i*rh; g+=`<line x1="${f(x0)}" y1="${f(y)}" x2="${f(x1)}" y2="${f(y)}"/>`; }
+  g+=`<line x1="${f(x0)}" y1="${f(y0)}" x2="${f(x0)}" y2="${f(y1)}"/><line x1="${f(x1)}" y1="${f(y0)}" x2="${f(x1)}" y2="${f(y1)}"/>`;
+  for(let i=0;i<rows;i++){ const y=y0+i*rh, off=(i%2)?0:0.5;
+    for(let j=0;j<=2;j++){ const vx=x0+(off+j)*w/2; if(vx>x0+0.5 && vx<x1-0.5) g+=`<line x1="${f(vx)}" y1="${f(y)}" x2="${f(vx)}" y2="${f(y+rh)}"/>`; } }
+  g+=`</g>`;
+  const fx=cx+0.3*r, fy=cy+0.3*r, fr=0.3*r;                 // flame lower-right
+  g+=`<path d="M ${f(fx)} ${f(fy-fr)} C ${f(fx+fr)} ${f(fy-fr*0.1)}, ${f(fx+fr*0.5)} ${f(fy+fr)}, ${f(fx)} ${f(fy+fr)} C ${f(fx-fr*0.7)} ${f(fy+fr)}, ${f(fx-fr*0.9)} ${f(fy)}, ${f(fx)} ${f(fy-fr)} Z" fill="#fff"/>`;
+  g+=`<path d="M ${f(fx)} ${f(fy-fr*0.2)} C ${f(fx+fr*0.4)} ${f(fy+fr*0.2)}, ${f(fx+fr*0.2)} ${f(fy+fr*0.6)}, ${f(fx)} ${f(fy+fr*0.6)} C ${f(fx-fr*0.3)} ${f(fy+fr*0.6)}, ${f(fx-fr*0.35)} ${f(fy+fr*0.2)}, ${f(fx)} ${f(fy-fr*0.2)} Z" fill="${fill}"/>`;
+  return g;
+}
+function firewallNode(p){
+  const r=32, ly=p.y+r+20, lbl=esc(p.node.label), w=lbl.length*7.6+12;
+  return firewallIcon(p.x,p.y,r,'var(--firewall)')
+    +`<rect x="${p.x-w/2}" y="${ly-12}" width="${w}" height="17" rx="3" fill="#fff" opacity="0.92"/>`
+    +`<text x="${p.x}" y="${ly+1}" text-anchor="middle" font-size="13" font-weight="600" fill="#7c3aed">${lbl}</text>`;
+}
 function clusterNode(p){
   const r=24, dx=32, padX=dx+r+12, padY=r+14;
   const lbl=esc(p.node.label), w=lbl.length*7.6+12, ly=p.y+padY+16;
@@ -348,6 +353,7 @@ function clusterNode(p){
 }
 function deviceNode(p){
   if(p.kind==="cluster") return clusterNode(p);
+  if(p.kind==="firewall") return firewallNode(p);
   const isHub=p.kind==="hub", fill=isHub?"var(--hub)":"var(--spoke)", r=isHub?38:32;
   const ly=isHub?p.y-r-14:p.y+r+20;              // hub label above, spoke label below — clear of links
   const lbl=esc(p.node.label), w=lbl.length*7.6+12;
@@ -572,7 +578,6 @@ function initDraw(){ const dr=document.getElementById("draw"); if(!dr) return;
 /* ================= EDIT ACTIONS ======================================= */
 function opts(list,ph){ return (ph?`<option value="">${ph}</option>`:"")+list.map(d=>`<option value="${d.id}">${esc(d.label)}</option>`).join(""); }
 function refreshUI(){
-  document.getElementById("m-plane").innerHTML=model.mgmt.planes.map(p=>`<option value="${p.id}">${esc(p.label)}</option>`).join("");
   renderElements();
   renderChecks();
   renderSuggestions();
@@ -640,19 +645,32 @@ function renderSuggestions(){
   if(!sd){ sec.style.display="none"; box.innerHTML=""; return; }
   sec.style.display="";
   const connected=new Set(); model.links.forEach(l=>{ if(l.from===sd.id) connected.add(l.to); if(l.to===sd.id) connected.add(l.from); });
-  const hubTargets=model.devices.filter(d=>d.id!==sd.id && isCore(d.kind) && !connected.has(d.id));
+  const cand=model.devices.filter(d=>d.id!==sd.id && !connected.has(d.id) && canConnectKinds(sd.kind,d.kind));
+  const hubTargets=cand.filter(d=>isCore(d.kind));
+  const spokeTargets=cand.filter(d=>d.kind==="spoke");
+  const fwTargets=cand.filter(d=>d.kind==="firewall");
   const gwTargets=[]; model.mgmt.planes.forEach(pl=>pl.services.forEach(sv=>{ if(sv.type==="vcg"){ const gid="svc:"+sv.id; if(!connected.has(gid)) gwTargets.push({id:gid,label:sv.label}); } }));
-  const kc=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":"#2b9fd8";
+  const kc=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":k==="firewall"?"#f4685f":"#2b9fd8";
   const sug=(tid,label,tag,color)=>`<li><span>${esc(label)} <span class="tag" style="background:${color}">${esc(tag)}</span></span>`
     +`<span class="ed" style="color:#159957;font-weight:800;font-size:15px" title="Add connection" onclick="connectSuggested('${sd.id}','${tid}')">＋</span></li>`;
   let h=`<div class="hint" style="margin-top:0">From <b>${esc(sd.label)}</b> — click ＋ to add.</div>`;
   if(hubTargets.length) h+=`<div class="grp">Hubs / clusters</div><ul class="links">${hubTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
+  if(spokeTargets.length) h+=`<div class="grp">Spokes</div><ul class="links">${spokeTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
+  if(fwTargets.length) h+=`<div class="grp">Firewalls</div><ul class="links">${fwTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
   if(gwTargets.length) h+=`<div class="grp">Gateways</div><ul class="links">${gwTargets.map(g=>sug(g.id,g.label,"VCG","#2b9fd8")).join("")}</ul>`;
-  if(!hubTargets.length && !gwTargets.length) h+=`<div class="muted">Connected to every hub, cluster and gateway.</div>`;
+  if(!cand.length && !gwTargets.length) h+=`<div class="muted">No further connections available.</div>`;
   // always offer a new subnet on this device
   h+=`<div class="grp">Subnet</div><ul class="links"><li><span>New subnet <span class="tag" style="background:#2f80c9">${esc(nextSubnetCidr())}</span></span>`
     +`<span class="ed" style="color:#159957;font-weight:800;font-size:15px" title="Add subnet" onclick="addSuggestedSubnet('${sd.id}')">＋</span></li></ul>`;
   box.innerHTML=h;
+}
+function canConnectKinds(a,b){                            // allowed device↔device pairs (gateways handled separately)
+  const fwOK=k=>k==="spoke"||k==="hub"||k==="cluster";   // firewall connects to spoke/hub/cluster
+  if(a==="firewall") return fwOK(b);
+  if(b==="firewall") return fwOK(a);
+  if(isCore(a)&&isCore(b)) return true;                  // core ↔ core
+  if((a==="spoke"&&isCore(b))||(b==="spoke"&&isCore(a))) return true;   // spoke ↔ core
+  return false;
 }
 function connectSuggested(a,b){ pushUndo(); model.links.push({id:uid("l"),from:a,to:b,transport:"sdwan"}); render(); }
 function addSuggestedSubnet(id){ pushUndo(); model.subnets.push({id:uid("s"),anchor:id,cidr:nextSubnetCidr()}); render(); }
@@ -665,7 +683,7 @@ function renderChecks(){ const el=document.getElementById("checks"); if(!el) ret
 function uid(p){ return p+Math.random().toString(36).slice(2,7); }
 function addDevice(kind,cloud){
   pushUndo();
-  const base=kind==="hub"?"Hub":kind==="cluster"?"Cluster":"Spoke";
+  const base=kind==="hub"?"Hub":kind==="cluster"?"Cluster":kind==="firewall"?"FW":"Spoke";
   const name=base+(model.devices.filter(d=>d.kind===kind).length+1);
   model.devices.push({id:uid("d"),kind,label:name,cloud:cloud||undefined});
   render();
@@ -680,7 +698,7 @@ function addMgmt(type){                                   // quick-add VCO / VCG
   render();
 }
 function paletteSvg(vb,inner,w){ return `<svg viewBox="${vb}" width="${w||30}">${inner}</svg>`; }
-function spokeCloudIcon(prov){ return `<svg viewBox="0 0 28 28" width="30">${edgeIcon(14,14,11,'var(--spoke)')}`
+function cloudHubIcon(prov){ return `<svg viewBox="0 0 28 28" width="30">${edgeIcon(14,14,11,'var(--hub)')}`
   +`<g transform="translate(20.5,7.5) scale(0.30)"><circle r="24" fill="#fff" stroke="#d0d5dd"/>${providerMark(0,0,prov)}</g></svg>`; }
 function buildPalette(){
   const el=document.getElementById("palette"); if(!el) return;
@@ -689,11 +707,12 @@ function buildPalette(){
     +edgeIcon(13,14,8,'var(--hub)')+edgeIcon(33,14,8,'var(--hub)'),40);
   const items=[
     ["Spoke","addDevice('spoke')",paletteSvg("0 0 28 28",edgeIcon(14,14,11,'var(--spoke)'))],
-    ["AWS Spoke","addDevice('spoke','aws')",spokeCloudIcon('aws')],
-    ["Azure Spoke","addDevice('spoke','azure')",spokeCloudIcon('azure')],
-    ["GCP Spoke","addDevice('spoke','gcp')",spokeCloudIcon('gcp')],
     ["Hub","addDevice('hub')",paletteSvg("0 0 28 28",edgeIcon(14,14,11,'var(--hub)'))],
+    ["AWS Hub","addDevice('hub','aws')",cloudHubIcon('aws')],
+    ["Azure Hub","addDevice('hub','azure')",cloudHubIcon('azure')],
+    ["GCP Hub","addDevice('hub','gcp')",cloudHubIcon('gcp')],
     ["Cluster","addDevice('cluster')",clusterIc],
+    ["Firewall","addDevice('firewall')",paletteSvg("0 0 28 28",firewallIcon(14,14,11,'var(--firewall)'))],
     ["VCO","addMgmt('vco')",paletteSvg("0 0 28 28",vcoIcon(14,14,11))],
     ["VCG","addMgmt('vcg')",paletteSvg("0 0 28 28",vcgIcon(14,14,11))],
   ];
@@ -825,6 +844,9 @@ function initResize(){
 /* ================= VELOCLOUD RESOURCES MENU =========================== */
 const RES_BASE="https://www.arista.com/assets/data/pdf/";
 const RESOURCES=[
+  {g:"Knowledge Base", items:[
+    ["Arista Velocloud Knowledge Base","https://arista.my.site.com/AristaCommunity/s/knowledge#t=All&sort=relevancy&f:@sfdatacategoryarticleexpanded=[VeloCloud]"],
+  ]},
   {g:"Guides & Deployment", items:[
     ["VeloCloud SD-WAN Data Sheet","VeloCloud-SD-WAN-Data-Sheet.pdf"],
     ["SD-WAN 6.4 Administration Guide","qsg/VC-SD-WAN-6.4-Administration-Guide.pdf"],
@@ -886,7 +908,7 @@ function buildResources(){
   const el=document.getElementById("res-menu"); if(!el) return;
   el.innerHTML=RESOURCES.map(sec=>
     `<div class="menu-grp">${sec.g}</div>`+
-    sec.items.map(([label,path])=>`<a href="${RES_BASE}${path}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")
+    sec.items.map(([label,path])=>`<a href="${path.startsWith("http")?path:RES_BASE+path}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")
   ).join("");
 }
 function toggleResources(e){ e.stopPropagation(); document.getElementById("res-menu").classList.toggle("open"); }
