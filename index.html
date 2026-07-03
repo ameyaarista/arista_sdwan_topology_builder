@@ -167,26 +167,9 @@
       <ul class="links" id="link-list"></ul>
     </div>
 
-    <div class="section">
-      <h2>Cloud connection</h2>
-      <div class="row">
-        <div><label>Provider</label>
-          <select id="cl-prov"><option value="aws">AWS</option><option value="azure">Azure</option><option value="gcp">GCP</option></select>
-        </div>
-        <div><label>CIDR</label><input id="cl-cidr" placeholder="10.20.0.0/16"></div>
-      </div>
-      <label>Attach to (device or VCG gateway)</label>
-      <select id="cl-anchor"></select>
-      <button class="btn add" onclick="addCloud()">+ Add cloud</button>
-    </div>
-
-    <div class="section">
-      <h2>Add subnet</h2>
-      <label>CIDR</label>
-      <input id="su-cidr" placeholder="10.0.1.0/24">
-      <label>Attach to device</label>
-      <select id="su-anchor"></select>
-      <button class="btn add" onclick="addSubnet()">+ Add subnet</button>
+    <div class="section" id="suggest-section" style="display:none">
+      <h2>Suggested connections</h2>
+      <div id="suggest"></div>
     </div>
 
     <div class="section">
@@ -233,11 +216,6 @@
       <h2>Edit elements</h2>
       <div id="elements"></div>
       <div class="hint">✎ edit fields · ✕ delete · click a colored tag to change type. Deleting a device also removes its links, subnets and clouds.</div>
-    </div>
-
-    <div class="section" id="suggest-section" style="display:none">
-      <h2>Suggested connections</h2>
-      <div id="suggest"></div>
     </div>
 
     <div class="section">
@@ -634,8 +612,6 @@ function refreshUI(){
   document.getElementById("d-connto").innerHTML=opts(all,"— none —")+gwGroup;
   document.getElementById("c-from").innerHTML=opts(all)+gwGroup;   // any node ↔ gateway
   document.getElementById("c-to").innerHTML=opts(all)+gwGroup;
-  document.getElementById("cl-anchor").innerHTML=opts(all)+vcgOpts.join("");
-  document.getElementById("su-anchor").innerHTML=opts(all);
   document.getElementById("m-plane").innerHTML=model.mgmt.planes.map(p=>`<option value="${p.id}">${esc(p.label)}</option>`).join("");
   document.getElementById("link-list").innerHTML=model.links.map(l=>{
     const t=TR[linkStyleKey(l)]||TR.direct;
