@@ -103,6 +103,7 @@
         <a href="#" onclick="applyTemplate('fivesite');return false">5-Site (2 hubs, 3 spokes)</a>
         <a href="#" onclick="applyTemplate('threesite');return false">3-Site (1 hub, 2 spokes)</a>
         <a href="#" onclick="applyTemplate('nsdvedge');return false">NSDvEdge</a>
+        <a href="#" onclick="applyTemplate('nsdvgateway');return false">NSDvGateway</a>
       </div>
     </div>
     <div class="dropdown">
@@ -1230,6 +1231,22 @@ const TEMPLATES={
       {id:"l4",from:"sMEL",to:"zMEL",transport:"sdwan"},
     ];
     return {devices,links,subnets:[],clouds:[],mgmt:{planes:[],services:[]}};
+  }},
+  nsdvgateway:{ label:"NSDvGateway", build(){
+    const devices=[
+      {id:"sSYD",kind:"spoke",label:"Sydney Spoke"},
+      {id:"sMEL",kind:"spoke",label:"Melbourne Spoke"},
+      {id:"zSYD",kind:"zscaler",label:"Zscaler Sydney"},
+      {id:"zMEL",kind:"zscaler",label:"Zscaler Melbourne"},
+    ];
+    const gw="svc:gwSYD";
+    const links=[
+      {id:"l1",from:"sSYD",to:gw,transport:"sdwan"},       // all spokes -> gateway
+      {id:"l2",from:"sMEL",to:gw,transport:"sdwan"},
+      {id:"l3",from:gw,to:"zSYD",transport:"ipsec"},       // gateway -> both Zscaler (IPsec)
+      {id:"l4",from:gw,to:"zMEL",transport:"ipsec"},
+    ];
+    return {devices,links,subnets:[],clouds:[],mgmt:{planes:[],services:[{id:"gwSYD",label:"Sydney Gateway",ip:"",type:"vcg"}]}};
   }}
 };
 function applyTemplate(name){ const t=TEMPLATES[name]; if(!t) return;
