@@ -108,6 +108,7 @@
       <button class="btn sec" onclick="toggleResources(event)">Velocloud resources ▾</button>
       <div class="menu" id="res-menu"></div>
     </div>
+    <button class="btn sec" onclick="autoArrange()" title="Tidy up the layout">Auto-arrange</button>
     <button class="btn sec" onclick="resetModel()">Reset to sample</button>
     <button class="btn sec" onclick="clearCanvas()" style="background:#fde8e8;color:#b91c1c">Clear canvas</button>
   </div>
@@ -993,6 +994,15 @@ function cycleProvider(id){ const c=model.clouds.find(x=>x.id===id); if(!c) retu
   c.provider=order[(order.indexOf(c.provider)+1)%order.length]; render(); }
 function delCloud(id){ pushUndo(); model.clouds=model.clouds.filter(c=>c.id!==id); render(); }
 
+function autoArrange(){                                    // unpin everything -> re-run auto layout -> fit
+  pushUndo();
+  model.devices.forEach(d=>{ delete d.x; delete d.y; });
+  mgmtSvcs().forEach(sv=>{ delete sv.x; delete sv.y; });
+  (model.subnets||[]).forEach(su=>{ delete su.x; delete su.y; });
+  (model.clouds||[]).forEach(c=>{ delete c.x; delete c.y; });
+  model.mgmt.planes.forEach(pl=>{ delete pl.x; delete pl.y; });
+  selected=new Set(); world=null; render(); fitToScreen();
+}
 function resetModel(){ pushUndo(); model=TEMPLATES.multiregion.build(); selected=new Set(); zoom=1; world=null; render(); centerScroll(); }
 function blankModel(){ return {devices:[],links:[],subnets:[],clouds:[],mgmt:{planes:[],services:[]}}; }
 function clearCanvas(){ if(!confirm("Clear the canvas? This removes all devices and connections.")) return;
