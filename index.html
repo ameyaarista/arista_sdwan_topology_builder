@@ -267,12 +267,16 @@ const esc=s=>String(s).replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[
 const TR={sdwan:{c:"var(--sdwan)",t:"SD-WAN",dash:""},ipsec:{c:"var(--ipsec)",t:"IPsec",dash:'stroke-dasharray="6 4"'},direct:{c:"var(--direct)",t:"Direct",dash:""},interconnect:{c:"var(--interconnect)",t:"Interconnect",dash:""}};
 // endpoint kind: device kind, or "gateway" for a VCG service
 function epKind(id){ if(id&&id.startsWith("svc:")){ const sv=entity(id); return sv&&sv.type==="vcg"?"gateway":null; } return dev(id)?.kind; }
-// gateway <-> SSE / firewall links are IPsec
-function isIpsecPair(a,b){ const ka=epKind(a), kb=epKind(b), sf=k=>k==="firewall"||k==="zscaler"||k==="prisma"||k==="netskope";
-  return (ka==="gateway"&&sf(kb))||(kb==="gateway"&&sf(ka)); }
-// SSE <-> Internet links are drawn plain (no transport label)
+// IPsec links: gateway<->SSE/firewall, and firewall<->spoke/hub/cluster/gateway
+function isIpsecPair(a,b){ const ka=epKind(a), kb=epKind(b);
+  const sf=k=>k==="firewall"||k==="zscaler"||k==="prisma"||k==="netskope";
+  if((ka==="gateway"&&sf(kb))||(kb==="gateway"&&sf(ka))) return true;
+  const edge=k=>k==="spoke"||k==="hub"||k==="cluster"||k==="gateway";
+  return (ka==="firewall"&&edge(kb))||(kb==="firewall"&&edge(ka)); }
+// plain (unlabeled) links: SSE<->Internet, and anything touching a router/switch
 function isNoLabelPair(a,b){ const ka=epKind(a), kb=epKind(b), sse=k=>k==="zscaler"||k==="prisma"||k==="netskope";
-  return (sse(ka)&&kb==="internet")||(sse(kb)&&ka==="internet"); }
+  if((sse(ka)&&kb==="internet")||(sse(kb)&&ka==="internet")) return true;
+  return ka==="router"||kb==="router"||ka==="switch"||kb==="switch"; }
 // links between two core nodes (hub↔hub, cluster↔cluster, hub↔cluster) are shown as "Interconnect"
 function linkStyleKey(l){
   if(isCore(dev(l.from)?.kind) && isCore(dev(l.to)?.kind)) return "interconnect";
