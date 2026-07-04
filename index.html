@@ -104,6 +104,7 @@
         <a href="#" onclick="applyTemplate('threesite');return false">3-Site (1 hub, 2 spokes)</a>
         <a href="#" onclick="applyTemplate('nsdvedge');return false">NSDvEdge</a>
         <a href="#" onclick="applyTemplate('nsdvgateway');return false">NSDvGateway</a>
+        <a href="#" onclick="applyTemplate('regional100');return false">Regional (100 devices)</a>
       </div>
     </div>
     <div class="dropdown">
@@ -619,6 +620,7 @@ let drag=null, raf=0, winBound=false;
 let selected=new Set();      // ids of selected nodes (supports group move)
 let selectedLink=null;       // id of selected connection
 let marquee=null;            // active rubber-band selection
+let panning=null, spaceDown=false;   // Space/middle-drag to pan the canvas
 function svgPoint(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
   return p.matrixTransform(svg.getScreenCTM().inverse()); }
 function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(()=>{raf=0;render();}); }
@@ -638,6 +640,9 @@ function freezeLayout(){                                  // pin every auto-posi
 }
 function bindDrag(svg){
   svg.addEventListener("pointerdown",e=>{
+    if(spaceDown || e.button===1){                        // pan: Space-drag or middle-mouse drag
+      e.preventDefault(); const c=document.querySelector(".canvas");
+      panning={sx:e.clientX,sy:e.clientY,sl:c.scrollLeft,st:c.scrollTop}; c.style.cursor="grabbing"; return; }
     const lbadge=e.target.closest(".link-del-badge");
     if(lbadge){ e.preventDefault(); e.stopPropagation(); delLink(lbadge.dataset.lid); return; }
     const ebadge=e.target.closest(".edit-badge");
@@ -665,13 +670,14 @@ function bindDrag(svg){
     const en=entity(g.dataset.id); if(en){delete en.x;delete en.y;render();} });   // dbl-click = reset to auto
   if(winBound) return; winBound=true;
   window.addEventListener("pointermove",e=>{
+    if(panning){ const c=document.querySelector(".canvas"); if(c){ c.scrollLeft=panning.sl-(e.clientX-panning.sx); c.scrollTop=panning.st-(e.clientY-panning.sy); } return; }
     if(drag){ const dux=(e.clientX-drag.sx)/zoom, duy=(e.clientY-drag.sy)/zoom;   // screen delta ÷ zoom = stable user delta
       if(!drag.moved && (Math.abs(e.clientX-drag.sx)>2||Math.abs(e.clientY-drag.sy)>2)){ drag.moved=true; pushUndo(); }
       drag.ids.forEach(id=>{ const en=entity(id), s=drag.start[id]; if(en&&s){ en.x=s.x+dux; en.y=s.y+duy; } });
       scheduleRender(); return; }
     if(marquee) updateMarquee(e);
   });
-  window.addEventListener("pointerup",()=>{ if(marquee) endMarquee(); drag=null; });
+  window.addEventListener("pointerup",()=>{ if(panning){ const c=document.querySelector(".canvas"); if(c) c.style.cursor=spaceDown?"grab":""; panning=null; } if(marquee) endMarquee(); drag=null; });
 }
 function startMarquee(e){
   selectedLink=null;
@@ -1250,6 +1256,54 @@ const TEMPLATES={
       {id:"l4",from:gw,to:"zMEL",transport:"ipsec"},
     ];
     return {devices,links,subnets:[],clouds:[],mgmt:{planes:[],services:[{id:"gwSYD",label:"Sydney Gateway",ip:"",type:"vcg"}]}};
+  }},
+  regional100:{ label:"Regional (100 devices)", build(){
+    const CITIES={
+      APAC:["SYD","MEL","BNE","PER","AKL","SIN","KUL","BKK","HKG","TYO","OSA","ICN","DEL","BOM","MAA","JKT","MNL","TPE","HAN","CBR"],
+      EMEA:["FRA","LON","MAN","DUB","MUC","PAR","MAD","BCN","MIL","AMS","BRU","ZRH","VIE","STO","OSL","CPH","DXB","JNB","IST","WAW"],
+      AMER:["NYC","BOS","IAD","ATL","MIA","DAL","IAH","ORD","DEN","PHX","SEA","SFO","SJC","LAX","YYZ","YVR","YUL","MEX","GRU","SCL"],
+    };
+    const CLOUD={APAC:"aws",EMEA:"azure",AMER:"gcp"};
+    const devices=[], links=[], services=[]; let lc=0;
+    const L=(from,to,t)=>links.push({id:"l"+(lc++),from,to,transport:t||"sdwan"});
+    const hubs={};
+    Object.entries(CITIES).forEach(([region,cities])=>{
+      const hc=cities[0];
+      const hub="h"+region, ch="ch"+region, cl="cl"+region, fw="fw"+region, inet="in"+region,
+            rtr="rt"+region, sw="sw"+region, zA="zA"+region, zB="zB"+region, nk="nk"+region, pr="pr"+region;
+      devices.push({id:hub,kind:"hub",label:"Hub-"+hc});
+      devices.push({id:ch,kind:"hub",cloud:CLOUD[region],label:"CloudHub-"+CLOUD[region].toUpperCase()+"-"+hc});
+      devices.push({id:cl,kind:"cluster",label:"Cluster-"+hc});
+      devices.push({id:zA,kind:"zscaler",label:"Zscaler-"+hc+"-A"});
+      devices.push({id:zB,kind:"zscaler",label:"Zscaler-"+hc+"-B"});
+      devices.push({id:nk,kind:"netskope",label:"Netskope-"+hc});
+      devices.push({id:pr,kind:"prisma",label:"Prisma-"+hc});
+      devices.push({id:fw,kind:"firewall",label:"FW-"+hc});
+      devices.push({id:inet,kind:"internet",label:"Internet-"+hc});
+      devices.push({id:rtr,kind:"router",label:"Router-"+hc});
+      devices.push({id:sw,kind:"switch",label:"Switch-"+hc});
+      hubs[region]=hub;
+      const sp=[];
+      cities.forEach((c,i)=>{ const sid="s"+region+i; devices.push({id:sid,kind:"spoke",label:"Spoke-"+c}); sp.push(sid); L(sid,hub,"sdwan"); });
+      L(hub,ch,"sdwan"); L(hub,cl,"sdwan"); L(ch,cl,"sdwan");                 // Interconnect (core↔core)
+      L(hub,zA,"ipsec"); L(hub,zB,"ipsec"); L(cl,zA,"ipsec"); L(cl,zB,"ipsec"); // redundant Zscaler (IPsec)
+      L(hub,nk,"ipsec"); L(hub,pr,"ipsec");
+      L(fw,hub,"ipsec"); L(fw,inet,"sdwan");
+      L(inet,zA); L(inet,zB); L(inet,nk); L(inet,pr);                          // plain internet breakout
+      L(inet,rtr); L(rtr,sw); L(sw,sp[0]);                                     // plain underlay
+      L(sp[1],inet,"direct");                                                  // Direct link
+      const g1="g1"+region, g2="g2"+region;
+      services.push({id:g1,label:"VCG-"+hc+"-1",ip:"",type:"vcg"});
+      services.push({id:g2,label:"VCG-"+hc+"-2",ip:"",type:"vcg"});
+      L("svc:"+g1,hub,"sdwan"); L("svc:"+g2,hub,"sdwan");
+      L("svc:"+g1,zA,"ipsec"); L("svc:"+g2,zB,"ipsec");                        // gateway→Zscaler redundancy
+    });
+    const hs=Object.values(hubs);
+    for(let i=0;i<hs.length;i++) for(let j=i+1;j<hs.length;j++) L(hs[i],hs[j],"sdwan");  // inter-region Interconnect
+    devices.push({id:"vwanEMEA",kind:"vwan",label:"vWAN-FRA"});
+    L("vwanEMEA","chEMEA","sdwan");
+    services.push({id:"vcoGLOBAL",label:"VCO-GLOBAL",ip:"",type:"vco"});
+    return {devices,links,subnets:[],clouds:[],mgmt:{planes:[],services}};
   }}
 };
 function applyTemplate(name){ const t=TEMPLATES[name]; if(!t) return;
@@ -1259,9 +1313,11 @@ function applyTemplate(name){ const t=TEMPLATES[name]; if(!t) return;
 function toggleTemplates(e){ e.stopPropagation(); document.getElementById("res-menu")?.classList.remove("open"); document.getElementById("tpl-menu").classList.toggle("open"); }
 document.addEventListener("click",()=>document.getElementById("tpl-menu")?.classList.remove("open"));
 
+window.addEventListener("keyup",e=>{ if(e.code==="Space"){ spaceDown=false; const c=document.querySelector(".canvas"); if(c&&!panning) c.style.cursor=""; } });
 window.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ clearSelection(); return; }
   const t=e.target.tagName; if(t==="INPUT"||t==="SELECT"||t==="TEXTAREA") return;
+  if(e.code==="Space"){ spaceDown=true; e.preventDefault(); const c=document.querySelector(".canvas"); if(c&&!panning) c.style.cursor="grab"; return; }
   if(e.key==="Delete"||e.key==="Backspace"){
     if(selectedLink){ e.preventDefault(); delLink(selectedLink); return; }
     if(selected.size){ e.preventDefault(); pushUndo(); [...selected].forEach(id=>{
