@@ -32,6 +32,7 @@
   .zoom-bar{position:absolute;right:12px;bottom:34px;z-index:20;display:flex;align-items:center;gap:4px;background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:4px;box-shadow:0 2px 8px rgba(16,24,40,.12)}
   .zoom-bar button{width:30px;height:28px;background:#f3f4f6;color:#1f2937;font-size:14px;font-weight:600;padding:0}
   .zoom-bar button:hover{background:#e5e7eb}
+  .zoom-bar button.act{background:#dbeafe;color:#1e40af;box-shadow:0 0 0 1.5px #93c5fd inset}
   .zoom-bar #zoom-pct{font-size:12px;min-width:44px;text-align:center;color:#374151}
   #draw{position:absolute;top:0;left:0;pointer-events:none}
   #pen-tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
@@ -130,14 +131,6 @@
         <button class="pentool" style="--c:#111827" data-color="#111827" title="Black" onclick="setPen('#111827')"></button>
       </div>
       <button class="btn sec" onclick="clearDrawing()">Clear drawing</button>
-      <button class="btn sec" onclick="addText()" style="margin-top:6px">+ Add text box</button>
-    </div>
-
-    <div class="section">
-      <h2>Connectors</h2>
-      <button class="btn sec" id="con-solid" onclick="setConnect('solid')">— Solid line</button>
-      <button class="btn sec" id="con-dotted" onclick="setConnect('dotted')" style="margin-top:6px">┄ Dotted line</button>
-      <div class="hint">Click a tool, then click two nodes to connect them. Select a connection to recolor it.</div>
     </div>
 
     <div class="section">
@@ -158,6 +151,10 @@
       <button onclick="fitToScreen()" title="Fit to screen" style="width:auto;padding:0 8px;font-size:12px">Fit</button>
       <button onclick="zoomReset()" title="Reset zoom" style="width:auto;padding:0 8px;font-size:12px">1:1</button>
       <button onclick="autoArrange()" title="Tidy up the layout" style="width:auto;padding:0 8px;font-size:12px">Auto-arrange</button>
+      <span style="width:1px;height:18px;background:#e5e7eb;margin:0 2px"></span>
+      <button id="con-solid" onclick="setConnect('solid')" title="Solid connector — click two nodes" style="font-size:17px">—</button>
+      <button id="con-dotted" onclick="setConnect('dotted')" title="Dotted connector — click two nodes" style="font-size:15px">┄</button>
+      <button onclick="addText()" title="Add text box" style="font-weight:700">T</button>
     </div>
     <div class="canvas">
       <div id="stage">
