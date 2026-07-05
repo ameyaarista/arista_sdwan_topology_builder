@@ -21,7 +21,7 @@
   .gutter{flex:0 0 6px;cursor:col-resize;background:#eef0f2;transition:background .15s}
   .gutter:hover,.gutter.dragging{background:#c7ccd4}
   .canvas-wrap{flex:1;min-width:0;position:relative;display:flex;overflow:hidden}
-  .canvas{flex:1;min-width:0;overflow:scroll;background:#fff;position:relative;scrollbar-width:auto}
+  .canvas{flex:1;min-width:0;overflow:scroll;background:#fff;position:relative;scrollbar-width:auto;margin-bottom:22px}
   .canvas::-webkit-scrollbar{width:12px;height:12px}
   .canvas::-webkit-scrollbar-thumb{background:#c1c7d0;border-radius:6px;border:2px solid #fff}
   .canvas::-webkit-scrollbar-thumb:hover{background:#a8aeb8}
@@ -29,7 +29,7 @@
   .canvas::-webkit-scrollbar-corner{background:#f1f2f4}
   #stage{position:relative;display:inline-block;margin:600px}
   .marquee{position:absolute;border:1.5px dashed #2563eb;background:rgba(37,99,235,.08);pointer-events:none;z-index:5}
-  .zoom-bar{position:absolute;right:12px;bottom:12px;z-index:20;display:flex;align-items:center;gap:4px;background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:4px;box-shadow:0 2px 8px rgba(16,24,40,.12)}
+  .zoom-bar{position:absolute;right:12px;bottom:34px;z-index:20;display:flex;align-items:center;gap:4px;background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:4px;box-shadow:0 2px 8px rgba(16,24,40,.12)}
   .zoom-bar button{width:30px;height:28px;background:#f3f4f6;color:#1f2937;font-size:14px;font-weight:600;padding:0}
   .zoom-bar button:hover{background:#e5e7eb}
   .zoom-bar #zoom-pct{font-size:12px;min-width:44px;text-align:center;color:#374151}
@@ -111,7 +111,6 @@
       <button class="btn sec" onclick="toggleResources(event)">Velocloud resources ▾</button>
       <div class="menu" id="res-menu"></div>
     </div>
-    <button class="btn sec" onclick="autoArrange()" title="Tidy up the layout">Auto-arrange</button>
     <button class="btn sec" onclick="resetModel()">Reset to sample</button>
     <button class="btn sec" onclick="clearCanvas()" style="background:#fde8e8;color:#b91c1c">Clear canvas</button>
   </div>
@@ -150,6 +149,7 @@
       <button onclick="zoomBy(1.2)" title="Zoom in">+</button>
       <button onclick="fitToScreen()" title="Fit to screen" style="width:auto;padding:0 8px;font-size:12px">Fit</button>
       <button onclick="zoomReset()" title="Reset zoom" style="width:auto;padding:0 8px;font-size:12px">1:1</button>
+      <button onclick="autoArrange()" title="Tidy up the layout" style="width:auto;padding:0 8px;font-size:12px">Auto-arrange</button>
     </div>
     <div class="canvas">
       <div id="stage">
