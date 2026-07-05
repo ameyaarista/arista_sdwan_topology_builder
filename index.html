@@ -104,7 +104,6 @@
         <a href="#" onclick="applyTemplate('threesite');return false">3-Site (1 hub, 2 spokes)</a>
         <a href="#" onclick="applyTemplate('nsdvedge');return false">NSDvEdge</a>
         <a href="#" onclick="applyTemplate('nsdvgateway');return false">NSDvGateway</a>
-        <a href="#" onclick="applyTemplate('regional100');return false">Regional (100 devices)</a>
       </div>
     </div>
     <div class="dropdown">
@@ -1256,54 +1255,6 @@ const TEMPLATES={
       {id:"l4",from:gw,to:"zMEL",transport:"ipsec"},
     ];
     return {devices,links,subnets:[],clouds:[],mgmt:{planes:[],services:[{id:"gwSYD",label:"Sydney Gateway",ip:"",type:"vcg"}]}};
-  }},
-  regional100:{ label:"Regional (100 devices)", build(){
-    const CITIES={
-      APAC:["SYD","MEL","BNE","PER","AKL","SIN","KUL","BKK","HKG","TYO","OSA","ICN","DEL","BOM","MAA","JKT","MNL","TPE","HAN","CBR"],
-      EMEA:["FRA","LON","MAN","DUB","MUC","PAR","MAD","BCN","MIL","AMS","BRU","ZRH","VIE","STO","OSL","CPH","DXB","JNB","IST","WAW"],
-      AMER:["NYC","BOS","IAD","ATL","MIA","DAL","IAH","ORD","DEN","PHX","SEA","SFO","SJC","LAX","YYZ","YVR","YUL","MEX","GRU","SCL"],
-    };
-    const CLOUD={APAC:"aws",EMEA:"azure",AMER:"gcp"};
-    const devices=[], links=[], services=[]; let lc=0;
-    const L=(from,to,t)=>links.push({id:"l"+(lc++),from,to,transport:t||"sdwan"});
-    const hubs={};
-    Object.entries(CITIES).forEach(([region,cities])=>{
-      const hc=cities[0];
-      const hub="h"+region, ch="ch"+region, cl="cl"+region, fw="fw"+region, inet="in"+region,
-            rtr="rt"+region, sw="sw"+region, zA="zA"+region, zB="zB"+region, nk="nk"+region, pr="pr"+region;
-      devices.push({id:hub,kind:"hub",label:"Hub-"+hc});
-      devices.push({id:ch,kind:"hub",cloud:CLOUD[region],label:"CloudHub-"+CLOUD[region].toUpperCase()+"-"+hc});
-      devices.push({id:cl,kind:"cluster",label:"Cluster-"+hc});
-      devices.push({id:zA,kind:"zscaler",label:"Zscaler-"+hc+"-A"});
-      devices.push({id:zB,kind:"zscaler",label:"Zscaler-"+hc+"-B"});
-      devices.push({id:nk,kind:"netskope",label:"Netskope-"+hc});
-      devices.push({id:pr,kind:"prisma",label:"Prisma-"+hc});
-      devices.push({id:fw,kind:"firewall",label:"FW-"+hc});
-      devices.push({id:inet,kind:"internet",label:"Internet-"+hc});
-      devices.push({id:rtr,kind:"router",label:"Router-"+hc});
-      devices.push({id:sw,kind:"switch",label:"Switch-"+hc});
-      hubs[region]=hub;
-      const sp=[];
-      cities.forEach((c,i)=>{ const sid="s"+region+i; devices.push({id:sid,kind:"spoke",label:"Spoke-"+c}); sp.push(sid); L(sid,hub,"sdwan"); });
-      L(hub,ch,"sdwan"); L(hub,cl,"sdwan"); L(ch,cl,"sdwan");                 // Interconnect (core↔core)
-      L(hub,zA,"ipsec"); L(hub,zB,"ipsec"); L(cl,zA,"ipsec"); L(cl,zB,"ipsec"); // redundant Zscaler (IPsec)
-      L(hub,nk,"ipsec"); L(hub,pr,"ipsec");
-      L(fw,hub,"ipsec"); L(fw,inet,"sdwan");
-      L(inet,zA); L(inet,zB); L(inet,nk); L(inet,pr);                          // plain internet breakout
-      L(inet,rtr); L(rtr,sw); L(sw,sp[0]);                                     // plain underlay
-      L(sp[1],inet,"direct");                                                  // Direct link
-      const g1="g1"+region, g2="g2"+region;
-      services.push({id:g1,label:"VCG-"+hc+"-1",ip:"",type:"vcg"});
-      services.push({id:g2,label:"VCG-"+hc+"-2",ip:"",type:"vcg"});
-      L("svc:"+g1,hub,"sdwan"); L("svc:"+g2,hub,"sdwan");
-      L("svc:"+g1,zA,"ipsec"); L("svc:"+g2,zB,"ipsec");                        // gateway→Zscaler redundancy
-    });
-    const hs=Object.values(hubs);
-    for(let i=0;i<hs.length;i++) for(let j=i+1;j<hs.length;j++) L(hs[i],hs[j],"sdwan");  // inter-region Interconnect
-    devices.push({id:"vwanEMEA",kind:"vwan",label:"vWAN-FRA"});
-    L("vwanEMEA","chEMEA","sdwan");
-    services.push({id:"vcoGLOBAL",label:"VCO-GLOBAL",ip:"",type:"vco"});
-    return {devices,links,subnets:[],clouds:[],mgmt:{planes:[],services}};
   }}
 };
 function applyTemplate(name){ const t=TEMPLATES[name]; if(!t) return;
