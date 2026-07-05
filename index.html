@@ -184,11 +184,6 @@
   <div class="gutter" data-target="panel-right" data-side="right" title="Drag to resize"></div>
 
   <aside class="panel right" id="panel-right">
-    <div class="section" id="align-section" style="display:none">
-      <h2>Align &amp; distribute</h2>
-      <div id="align-tools"></div>
-    </div>
-
     <div class="section" id="suggest-section" style="display:none">
       <h2>Suggested connections</h2>
       <div id="suggest"></div>
@@ -977,7 +972,6 @@ function refreshUI(){
   renderElements();
   renderChecks();
   renderSuggestions();
-  renderAlign();
 }
 function anchorLabel(id){ if(id&&id.startsWith("svc:")){ for(const pl of model.mgmt.planes){ const s=pl.services.find(v=>"svc:"+v.id===id); if(s) return s.label+" (VCG)"; } return "?"; } return dev(id)?.label||"?"; }
 const SVCLABEL={vcg:"VCG",vco:"VCO",syslog:"other"};
