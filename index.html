@@ -176,6 +176,11 @@
   <div class="gutter" data-target="panel-right" data-side="right" title="Drag to resize"></div>
 
   <aside class="panel right" id="panel-right">
+    <div class="section" id="align-section" style="display:none">
+      <h2>Align &amp; distribute</h2>
+      <div id="align-tools"></div>
+    </div>
+
     <div class="section" id="suggest-section" style="display:none">
       <h2>Suggested connections</h2>
       <div id="suggest"></div>
@@ -930,6 +935,7 @@ function refreshUI(){
   renderElements();
   renderChecks();
   renderSuggestions();
+  renderAlign();
 }
 function anchorLabel(id){ if(id&&id.startsWith("svc:")){ for(const pl of model.mgmt.planes){ const s=pl.services.find(v=>"svc:"+v.id===id); if(s) return s.label+" (VCG)"; } return "?"; } return dev(id)?.label||"?"; }
 const SVCLABEL={vcg:"VCG",vco:"VCO",syslog:"other"};
@@ -986,6 +992,37 @@ function runChecks(){
     }
   }
   return issues;
+}
+/* ---- align & distribute selected nodes ---- */
+function alignNodes(mode){
+  const ids=[...selected]; if(ids.length<2) return;
+  pushUndo(); freezeLayout(); const geo=computeGeometry();
+  const items=ids.map(id=>({en:entity(id),p:geo[id]})).filter(o=>o.en&&o.p);
+  if(items.length<2) return;
+  const xs=items.map(o=>o.p.x), ys=items.map(o=>o.p.y);
+  const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+  const setX=(o,x)=>{ o.en.x=Math.round(x); if(o.en.y==null) o.en.y=Math.round(o.p.y); };
+  const setY=(o,y)=>{ o.en.y=Math.round(y); if(o.en.x==null) o.en.x=Math.round(o.p.x); };
+  if(mode==="left") items.forEach(o=>setX(o,minX));
+  else if(mode==="centerX"){ const c=(minX+maxX)/2; items.forEach(o=>setX(o,c)); }
+  else if(mode==="right") items.forEach(o=>setX(o,maxX));
+  else if(mode==="top") items.forEach(o=>setY(o,minY));
+  else if(mode==="centerY"){ const c=(minY+maxY)/2; items.forEach(o=>setY(o,c)); }
+  else if(mode==="bottom") items.forEach(o=>setY(o,maxY));
+  else if(mode==="distH"){ const a=items.slice().sort((p,q)=>p.p.x-q.p.x), st=(maxX-minX)/(a.length-1); a.forEach((o,i)=>setX(o,minX+i*st)); }
+  else if(mode==="distV"){ const a=items.slice().sort((p,q)=>p.p.y-q.p.y), st=(maxY-minY)/(a.length-1); a.forEach((o,i)=>setY(o,minY+i*st)); }
+  render();
+}
+function renderAlign(){
+  const sec=document.getElementById("align-section"), box=document.getElementById("align-tools"); if(!sec) return;
+  if(selected.size<2){ sec.style.display="none"; box.innerHTML=""; return; }
+  sec.style.display="";
+  const b=(m,label,title)=>`<button class="btn sec" style="padding:6px 4px;font-size:12px" onclick="alignNodes('${m}')" title="${title}">${label}</button>`;
+  box.innerHTML=`<div class="grp" style="margin-top:0">Align</div>`
+    +`<div class="row">${b("left","Left","Align left edges")}${b("centerX","Center","Align centers (vertical)")}${b("right","Right","Align right edges")}</div>`
+    +`<div class="row" style="margin-top:5px">${b("top","Top","Align top")}${b("centerY","Middle","Align middles (horizontal)")}${b("bottom","Bottom","Align bottom")}</div>`
+    +`<div class="grp">Distribute evenly</div>`
+    +`<div class="row">${b("distH","Horizontal","Space evenly left→right")}${b("distV","Vertical","Space evenly top→bottom")}</div>`;
 }
 /* ---- suggested connections for the selected device ---- */
 function renderSuggestions(){
