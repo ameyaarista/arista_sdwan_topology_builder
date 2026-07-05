@@ -154,7 +154,7 @@
       <span style="width:1px;height:18px;background:#e5e7eb;margin:0 2px"></span>
       <button id="con-solid" onclick="setConnect('solid')" title="Solid connector — click two nodes" style="font-size:17px">—</button>
       <button id="con-dotted" onclick="setConnect('dotted')" title="Dotted connector — click two nodes" style="font-size:15px">┄</button>
-      <button onclick="addText()" title="Add text box" style="font-weight:700">T</button>
+      <button id="tool-text" onclick="setTextMode()" title="Add text box — then click on the canvas" style="font-weight:700">T</button>
     </div>
     <div class="canvas">
       <div id="stage">
@@ -680,6 +680,7 @@ let marquee=null;            // active rubber-band selection
 let panning=null, spaceDown=false;   // Space/middle-drag to pan the canvas
 let resizing=null;                   // active node resize
 let connectMode=null, connectFrom=null;   // manual connector tool (solid/dotted)
+let textMode=false;                        // click-to-place text box tool
 function svgPoint(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
   return p.matrixTransform(svg.getScreenCTM().inverse()); }
 function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(()=>{raf=0;render();}); }
@@ -708,6 +709,11 @@ function bindDrag(svg){
       if(en&&gp){ const loc=svgPoint(svg,e); resizing={id,cx:gp.x,cy:gp.y,startScale:en.scale||1,startDist:Math.max(1,Math.hypot(loc.x-gp.x,loc.y-gp.y))}; } return; }
     const lcol=e.target.closest(".link-color");
     if(lcol){ e.preventDefault(); e.stopPropagation(); pushUndo(); const l=model.links.find(x=>x.id===lcol.dataset.lid); if(l){ l.color=lcol.dataset.color; render(); } return; }
+    if(textMode){                                          // text tool: click to place
+      e.preventDefault(); const loc=svgPoint(svg,e); textMode=false;
+      const b=document.getElementById("tool-text"); if(b) b.classList.remove("act");
+      const c=document.querySelector(".canvas"); if(c) c.style.cursor="";
+      placeTextAt(loc,e.clientX,e.clientY); return; }
     if(connectMode){                                       // connector tool: click two nodes
       e.preventDefault(); const gc=e.target.closest(".node");
       if(gc && (dev(gc.dataset.id)||gc.dataset.id.startsWith("svc:"))){ const id=gc.dataset.id;
@@ -992,11 +998,21 @@ function addPlaneBox(which){                              // add a standalone pl
   model.mgmt.planes.push({id:uid("pl"),label:which==="cdp"?"Control and Data Plane":"Management Plane",services:[],x:c.x,y:c.y});
   render();
 }
-function addText(){                                      // add a movable text box
-  const t=prompt("Text:","Text"); if(t===null) return;
-  pushUndo(); const c=viewCenterWorld();
-  (model.texts=model.texts||[]).push({id:uid("t"),text:t.trim()||"Text",x:c.x,y:c.y,size:16});
-  render();
+function setTextMode(){                                   // toggle click-to-place text tool
+  textMode=!textMode; connectMode=null; connectFrom=null; setConnectButtons();
+  const b=document.getElementById("tool-text"); if(b) b.classList.toggle("act",textMode);
+  const c=document.querySelector(".canvas"); if(c) c.style.cursor=textMode?"crosshair":"";
+}
+function placeTextAt(loc,screenX,screenY){               // drop a text box at the clicked point and edit it inline
+  pushUndo(); const t={id:uid("t"),text:"Text",x:Math.round(loc.x),y:Math.round(loc.y),size:16};
+  (model.texts=model.texts||[]).push(t); render();
+  const inp=document.createElement("input"); inp.type="text"; inp.value="Text";
+  inp.style.cssText=`position:fixed;left:${screenX-60}px;top:${screenY-14}px;z-index:200;width:130px;font-size:14px;font-weight:600;padding:2px 6px;border:1px solid #2563eb;border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.15)`;
+  document.body.appendChild(inp); inp.focus(); inp.select(); let done=false;
+  const finish=()=>{ if(done) return; done=true; t.text=inp.value.trim()||"Text"; inp.remove(); render(); };
+  const cancel=()=>{ if(done) return; done=true; inp.remove(); model.texts=model.texts.filter(x=>x.id!==t.id); render(); };
+  inp.addEventListener("keydown",ev=>{ ev.stopPropagation(); if(ev.key==="Enter") finish(); else if(ev.key==="Escape") cancel(); });
+  inp.addEventListener("blur",finish);
 }
 function paletteSvg(vb,inner,w){ return `<svg viewBox="${vb}" width="${w||30}">${inner}</svg>`; }
 function planeBoxIcon(){ return `<rect x="3" y="7" width="22" height="14" rx="3" fill="#f4f4f4" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="3 2"/>`; }
@@ -1362,7 +1378,7 @@ document.addEventListener("click",()=>document.getElementById("tpl-menu")?.class
 
 window.addEventListener("keyup",e=>{ if(e.code==="Space"){ spaceDown=false; const c=document.querySelector(".canvas"); if(c&&!panning) c.style.cursor=""; } });
 window.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if(connectMode){ connectMode=null; connectFrom=null; setConnectButtons(); render(); return; } clearSelection(); return; }
+  if(e.key==="Escape"){ if(textMode){ setTextMode(); return; } if(connectMode){ connectMode=null; connectFrom=null; setConnectButtons(); render(); return; } clearSelection(); return; }
   const t=e.target.tagName; if(t==="INPUT"||t==="SELECT"||t==="TEXTAREA") return;
   if(e.code==="Space"){ spaceDown=true; e.preventDefault(); const c=document.querySelector(".canvas"); if(c&&!panning) c.style.cursor="grab"; return; }
   if(e.key==="Delete"||e.key==="Backspace"){
