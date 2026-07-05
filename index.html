@@ -917,6 +917,11 @@ function bindDrag(svg){
         e.preventDefault(); const lid=fl.dataset.lid, now=Date.now();
         if(lastTap && lastTap.id==="line:"+lid && now-lastTap.t<350){ lastTap=null; editFreeLine(lid); return; }
         lastTap={id:"line:"+lid,t:now}; selectedLine=lid; selected=new Set(); selectedLink=null; render(); return; }
+      const clk=e.target.closest(".link");
+      if(clk){                                              // clicking an existing connection selects/edits it even while the tool is active
+        e.preventDefault(); const lid=clk.dataset.lid, now=Date.now();
+        if(lastTap && lastTap.id==="link:"+lid && now-lastTap.t<350){ lastTap=null; editLink(lid); return; }
+        lastTap={id:"link:"+lid,t:now}; selectedLink=lid; selectedLine=null; selected=new Set(); render(); return; }
       e.preventDefault(); const gc=e.target.closest(".node");
       if(gc && (dev(gc.dataset.id)||gc.dataset.id.startsWith("svc:"))){ const id=gc.dataset.id;
         if(!connectFrom) connectFrom=id;
