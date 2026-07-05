@@ -317,15 +317,19 @@ function linkStyleKey(l){
   return l.transport;
 }
 
-function linkLine(a,b,tr,color){
-  const s=TR[tr]||TR.direct, c=color||s.c; const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
-  const w=Math.max(60,s.t.length*5.6+14);
-  let ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;        // orient the tag along the line
-  if(ang>90) ang-=180; else if(ang<-90) ang+=180;         // keep text upright
+function linkPill(a,b,color,text){                        // rotated label pill along the line
+  const mx=(a.x+b.x)/2,my=(a.y+b.y)/2, w=Math.max(40,text.length*5.6+14);
+  let ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
+  if(ang>90) ang-=180; else if(ang<-90) ang+=180;
+  return `<g transform="rotate(${ang.toFixed(1)} ${mx} ${my})">`
+    +`<rect x="${mx-w/2}" y="${my-9}" width="${w}" height="16" rx="8" fill="${color}"/>`
+    +`<text x="${mx}" y="${my+3}" text-anchor="middle" font-size="9" fill="#fff">${esc(text)}</text></g>`;
+}
+function linkLine(a,b,tr,color,label){
+  const s=TR[tr]||TR.direct, c=color||s.c;
+  const text=(label!=null)?label:s.t;                     // custom label overrides transport text
   return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${c}" stroke-width="2" ${s.dash}/>`
-    +`<g transform="rotate(${ang.toFixed(1)} ${mx} ${my})">`
-    +`<rect x="${mx-w/2}" y="${my-9}" width="${w}" height="16" rx="8" fill="${c}"/>`
-    +`<text x="${mx}" y="${my+3}" text-anchor="middle" font-size="9" fill="#fff">${s.t}</text></g>`;
+    +(text?linkPill(a,b,c,text):"");
 }
 function setConnect(style){ connectMode=(connectMode&&connectMode.style===style)?null:{style}; connectFrom=null; setConnectButtons(); render(); }
 function setConnectButtons(){ const so=document.getElementById("con-solid"), d=document.getElementById("con-dotted");
@@ -559,11 +563,16 @@ function render(){
     if(l.style){                                                       // custom connector (solid / dotted)
       const col=l.color||"#374151", dash=l.style==="dotted"?' stroke-dasharray="2 6"':'';
       s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="2"${dash} stroke-linecap="round"/>`;
+      if(l.label) s+=linkPill(a,b,col,l.label);
     } else if(isNoLabelPair(l.from,l.to)){
       s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${l.color||'var(--direct)'}" stroke-width="2"/>`;
-    } else { s+=linkLine(a,b,linkStyleKey(l),l.color); }
+      if(l.label) s+=linkPill(a,b,l.color||"#6b7280",l.label);
+    } else { s+=linkLine(a,b,linkStyleKey(l),l.color,l.label); }
     s+=`</g>`;
     if(sel){ const by=my-20;
+      linkBadges+=`<g class="link-edit-badge" data-lid="${l.id}" style="cursor:pointer"><title>Edit label</title>`
+        +`<circle cx="${mx-22}" cy="${by}" r="9" fill="#2563eb" stroke="#fff" stroke-width="1.5"/>`
+        +`<text x="${mx-22}" y="${by+3.6}" text-anchor="middle" font-size="11" fill="#fff">✎</text></g>`;
       linkBadges+=`<g class="link-del-badge" data-lid="${l.id}" style="cursor:pointer"><title>Delete connection</title>`
         +`<circle cx="${mx}" cy="${by}" r="9" fill="#dc2626" stroke="#fff" stroke-width="1.5"/>`
         +`<line x1="${mx-3.4}" y1="${by-3.4}" x2="${mx+3.4}" y2="${by+3.4}" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/>`
@@ -707,6 +716,8 @@ function bindDrag(svg){
         render();
       } else { connectMode=null; connectFrom=null; setConnectButtons(); render(); }
       return; }
+    const lebadge=e.target.closest(".link-edit-badge");
+    if(lebadge){ e.preventDefault(); e.stopPropagation(); editLink(lebadge.dataset.lid); return; }
     const lbadge=e.target.closest(".link-del-badge");
     if(lbadge){ e.preventDefault(); e.stopPropagation(); delLink(lbadge.dataset.lid); return; }
     const ebadge=e.target.closest(".edit-badge");
@@ -1036,6 +1047,10 @@ function addLink(){
   render();
 }
 function delLink(id){ pushUndo(); model.links=model.links.filter(l=>l.id!==id); if(selectedLink===id) selectedLink=null; render(); }
+function editLink(id){ const l=model.links.find(x=>x.id===id); if(!l) return;
+  const cur = l.label!=null ? l.label : (l.style||isNoLabelPair(l.from,l.to) ? "" : (TR[linkStyleKey(l)]||TR.direct).t);
+  const v=prompt("Connection label (leave blank for none):",cur); if(v===null) return;
+  pushUndo(); l.label=v; render(); }
 function addCloud(){
   const anchor=document.getElementById("cl-anchor").value; if(!anchor) return alert("Add a device first.");
   pushUndo();
