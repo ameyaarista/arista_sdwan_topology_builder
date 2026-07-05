@@ -15,7 +15,13 @@
   header{padding:14px 20px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   header h1{font-size:16px;margin:0;font-weight:600}
   header .sub{font-size:12px;color:#6b7280}
-  .layout{display:flex;height:calc(100vh - 55px);min-height:620px}
+  .tabs{display:flex;align-items:flex-end;gap:4px;height:36px;padding:4px 12px 0;background:#eef0f2;border-bottom:1px solid #e5e7eb;overflow-x:auto}
+  .tab{padding:5px 10px;border:1px solid #e5e7eb;border-bottom:none;border-radius:7px 7px 0 0;background:#f7f8fa;cursor:pointer;font-size:12px;white-space:nowrap;display:flex;align-items:center;gap:6px;color:#374151}
+  .tab.active{background:#fff;border-color:#d1d5db;font-weight:600;color:#111827}
+  .tab .x{color:#b0b6be;font-weight:700;font-size:11px}
+  .tab .x:hover{color:#dc2626}
+  .tab-add{padding:4px 10px;border:1px dashed #cbd0d6;border-radius:7px;background:#fff;cursor:pointer;font-size:15px;color:#374151;line-height:1}
+  .layout{display:flex;height:calc(100vh - 91px);min-height:560px}
   .panel{width:320px;min-width:220px;flex:0 0 auto;background:#fff;border-right:1px solid #e5e7eb;padding:16px;overflow:auto}
   .panel.right{border-right:none;border-left:1px solid #e5e7eb}
   .gutter{flex:0 0 6px;cursor:col-resize;background:#eef0f2;transition:background .15s}
@@ -124,6 +130,8 @@
   </div>
 </header>
 
+<div id="tabs" class="tabs"></div>
+
 <div class="layout">
   <aside class="panel" id="panel-left">
 
@@ -220,7 +228,9 @@ function referenceModel(){
     ]}
   };
 }
+let pages=[], activePage=0;            // multi-page tabs; each page has its own model + undo history
 let model = referenceModel();
+function setModel(m){ model=m; if(pages[activePage]) pages[activePage].model=m; }   // keep active page in sync
 const dev = id => model.devices.find(d=>d.id===id);
 const isCore = k => k==="hub" || k==="cluster";       // "core" nodes sit in the top tier
 const isSSE = k => k==="zscaler" || k==="prisma" || k==="netskope";   // SASE/SSE services
@@ -726,12 +736,44 @@ function render(){
   bindDrag(document.getElementById("topo"));
   refreshUI(); updateZoomUI(); saveModel();
 }
-/* ---- auto-save to browser ---- */
+/* ---- auto-save to browser (whole multi-page document) ---- */
 const LS_KEY="sdwan_topology_v1"; let saveTimer=0;
-function saveModel(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{
-  try{ localStorage.setItem(LS_KEY,JSON.stringify(model)); }catch(e){} },250); }
-function loadModel(){ try{ const s=localStorage.getItem(LS_KEY); if(s){ const m=JSON.parse(s);
-  if(m&&Array.isArray(m.devices)&&m.mgmt&&Array.isArray(m.mgmt.planes)) return m; } }catch(e){} return null; }
+function saveModel(){ clearTimeout(saveTimer); saveTimer=setTimeout(()=>{ try{
+  localStorage.setItem(LS_KEY,JSON.stringify({active:activePage, pages:pages.map(p=>({id:p.id,name:p.name,model:p.model}))}));
+}catch(e){} },250); }
+function loadDoc(){ try{ const s=localStorage.getItem(LS_KEY); if(!s) return null; const d=JSON.parse(s);
+  if(d&&Array.isArray(d.pages)&&d.pages.length) return d;                         // multi-page format
+  if(d&&Array.isArray(d.devices)) return {active:0,pages:[{id:"pg1",name:"Page 1",model:d}]};   // legacy single model
+} catch(e){} return null; }
+/* ---- page tabs ---- */
+function renderTabs(){ const el=document.getElementById("tabs"); if(!el) return;
+  el.innerHTML=pages.map((p,i)=>`<div class="tab ${i===activePage?'active':''}" onclick="switchPage(${i})" ondblclick="renamePage(${i})" title="Double-click to rename">`
+    +`<span>${esc(p.name)}</span>`
+    +(pages.length>1?`<span class="x" onclick="event.stopPropagation();deletePage(${i})">✕</span>`:"")
+    +`</div>`).join("")
+    +`<button class="tab-add" onclick="newPage()" title="New page">+</button>`;
+}
+function switchPage(i){ if(i<0||i>=pages.length||i===activePage) return;
+  activePage=i; model=pages[i].model; undoStack=pages[i].undo; redoStack=pages[i].redo;
+  selected=new Set(); selectedLink=null; connectFrom=null; world=null; zoom=1;
+  render(); renderTabs(); updateHistUI(); saveModel(); centerScroll();
+}
+function newPage(){ const p={id:uid("pg"),name:"Page "+(pages.length+1),model:blankModel(),undo:[],redo:[]};
+  pages.push(p); switchPage(pages.length-1); }
+function deletePage(i){ if(pages.length<=1) return; if(!confirm("Delete "+pages[i].name+"?")) return;
+  pages.splice(i,1); activePage = activePage>=pages.length ? pages.length-1 : (activePage>i?activePage-1:activePage);
+  model=pages[activePage].model; undoStack=pages[activePage].undo; redoStack=pages[activePage].redo;
+  selected=new Set(); selectedLink=null; world=null; render(); renderTabs(); updateHistUI(); saveModel(); centerScroll();
+}
+function renamePage(i){ const el=document.getElementById("tabs"), tab=el&&el.children[i]; if(!tab) return;
+  const span=tab.querySelector("span"); if(!span) return;
+  const inp=document.createElement("input"); inp.value=pages[i].name;
+  inp.style.cssText="width:96px;font-size:12px;font-weight:600;border:1px solid #2563eb;border-radius:4px;padding:1px 5px";
+  span.replaceWith(inp); inp.focus(); inp.select(); let done=false;
+  const fin=()=>{ if(done) return; done=true; pages[i].name=inp.value.trim()||pages[i].name; renderTabs(); saveModel(); };
+  inp.addEventListener("keydown",e=>{ e.stopPropagation(); if(e.key==="Enter") fin(); else if(e.key==="Escape"){ done=true; renderTabs(); } });
+  inp.addEventListener("blur",fin);
+}
 
 /* ================= DRAG / SELECT / MARQUEE ============================= */
 let drag=null, raf=0, winBound=false;
@@ -1292,10 +1334,10 @@ function autoArrange(){                                    // unpin everything -
   model.mgmt.planes.forEach(pl=>{ delete pl.x; delete pl.y; });
   selected=new Set(); world=null; render(); fitToScreen();
 }
-function resetModel(){ pushUndo(); model=TEMPLATES.multiregion.build(); selected=new Set(); zoom=1; world=null; render(); centerScroll(); }
+function resetModel(){ pushUndo(); setModel(TEMPLATES.multiregion.build()); selected=new Set(); zoom=1; world=null; render(); centerScroll(); }
 function blankModel(){ return {devices:[],links:[],subnets:[],clouds:[],mgmt:{planes:[],services:[]}}; }
 function clearCanvas(){ if(!confirm("Clear the canvas? This removes all devices and connections.")) return;
-  pushUndo(); model=blankModel(); world=null; render(); centerScroll(); }
+  pushUndo(); setModel(blankModel()); world=null; render(); centerScroll(); }
 
 /* ================= EXPORTS ============================================= */
 function download(name,text){ const b=new Blob([text],{type:"application/json"});
@@ -1457,8 +1499,8 @@ function fitToScreen(){
 /* ================= UNDO / REDO ======================================== */
 let undoStack=[], redoStack=[];
 function pushUndo(){ undoStack.push(JSON.stringify(model)); if(undoStack.length>100) undoStack.shift(); redoStack.length=0; updateHistUI(); }
-function undo(){ if(!undoStack.length) return; redoStack.push(JSON.stringify(model)); model=JSON.parse(undoStack.pop()); selected=new Set(); render(); updateHistUI(); }
-function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(model)); model=JSON.parse(redoStack.pop()); selected=new Set(); render(); updateHistUI(); }
+function undo(){ if(!undoStack.length) return; redoStack.push(JSON.stringify(model)); setModel(JSON.parse(undoStack.pop())); selected=new Set(); render(); updateHistUI(); }
+function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(model)); setModel(JSON.parse(redoStack.pop())); selected=new Set(); render(); updateHistUI(); }
 function updateHistUI(){ const u=document.getElementById("btn-undo"),r=document.getElementById("btn-redo");
   if(u) u.disabled=!undoStack.length; if(r) r.disabled=!redoStack.length; }
 
@@ -1546,7 +1588,7 @@ const TEMPLATES={
 function applyTemplate(name){ const t=TEMPLATES[name]; if(!t) return;
   document.getElementById("tpl-menu")?.classList.remove("open");
   if(model.devices.length && !confirm("Replace the current canvas with the "+t.label+" template?")) return;
-  pushUndo(); model=t.build(); selected=new Set(); zoom=1; world=null; render(); centerScroll(); }
+  pushUndo(); setModel(t.build()); selected=new Set(); zoom=1; world=null; render(); centerScroll(); }
 function toggleTemplates(e){ e.stopPropagation(); document.getElementById("res-menu")?.classList.remove("open"); document.getElementById("exp-menu")?.classList.remove("open"); document.getElementById("tpl-menu").classList.toggle("open"); }
 document.addEventListener("click",()=>document.getElementById("tpl-menu")?.classList.remove("open"));
 
@@ -1578,7 +1620,11 @@ window.addEventListener("keydown",e=>{
 
 buildResources();
 buildPalette();
-const _saved=loadModel(); model = _saved || TEMPLATES.multiregion.build();   // restore last session, else Multi-Region default
+const _doc=loadDoc();                                  // restore all pages, else one Multi-Region page
+if(_doc){ pages=_doc.pages.map(p=>({id:p.id||uid("pg"),name:p.name||"Page 1",model:p.model,undo:[],redo:[]})); activePage=Math.min(_doc.active||0,pages.length-1); }
+else { pages=[{id:uid("pg"),name:"Page 1",model:TEMPLATES.multiregion.build(),undo:[],redo:[]}]; activePage=0; }
+model=pages[activePage].model; undoStack=pages[activePage].undo; redoStack=pages[activePage].redo;
+renderTabs();
 render();
 initDraw();
 initResize();
