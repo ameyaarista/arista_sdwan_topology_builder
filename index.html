@@ -285,8 +285,13 @@ function computeGeometry(){
   const place=(anchor,box)=>{ const a=pos[anchor]; if(!a) return null;
     const side=dir(anchor)>=0?-1:1; const k=anchor+side; const n=(off[k]=(off[k]||0)+1);
     return {x:a.x, y:a.y+side*(100+(n-1)*70), side, ...box}; };
-  model.subnets.forEach(su=>{ const p=place(su.anchor,{w:150,h:46,node:su,ptype:"subnet"}); if(!p) return;
-    if(su.x!=null){p.x=su.x;p.y=su.y;} pos[su.id]=p; });
+  // subnets: lay all subnets of a device in a horizontal row (side by side) beneath/above it
+  const subByAnchor={}; model.subnets.forEach(su=>{ (subByAnchor[su.anchor]=subByAnchor[su.anchor]||[]).push(su); });
+  Object.entries(subByAnchor).forEach(([anchor,list])=>{ const a=pos[anchor]; if(!a) return;
+    const side=dir(anchor)>=0?-1:1, baseY=a.y+side*112, gapX=132;
+    const auto=list.filter(su=>su.x==null), n=auto.length;
+    auto.forEach((su,i)=>{ pos[su.id]={x:a.x-(n-1)*gapX/2+i*gapX, y:baseY, side, node:su, ptype:"subnet"}; });
+    list.filter(su=>su.x!=null).forEach(su=>{ pos[su.id]={x:su.x, y:su.y, side, node:su, ptype:"subnet"}; }); });
   model.clouds.forEach(c=>{ const a=pos[c.anchor]; if(!a) return; let p;
     if(c.anchor.startsWith("svc:")){ const k="cl"+c.anchor; const n=(off[k]=(off[k]||0)+1);
       p={x:a.x, y:a.y-120-(n-1)*76, node:c, ptype:"cloud"}; }   // cloud from a VCG sits above the plane
