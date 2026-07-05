@@ -1078,6 +1078,34 @@ function renderTextTools(){ const sec=document.getElementById("text-section"), s
 }
 function setTextSize(v){ const ids=[...selected]; if(ids.length!==1||!ids[0].startsWith("text:")) return;
   const t=entity(ids[0]); if(!t) return; pushUndo(); t.size=parseInt(v,10)||16; render(); }
+/* ---- duplicate / copy-paste nodes ---- */
+let clipboard=null;
+function idType(id){ return dev(id)?"device":id.startsWith("svc:")?"svc":id.startsWith("text:")?"text":id.startsWith("group:")?"group":model.subnets.some(s=>s.id===id)?"subnet":model.clouds.some(x=>x.id===id)?"cloud":null; }
+function snapshotSelection(ids){ const geo=computeGeometry(), cp=o=>JSON.parse(JSON.stringify(o));
+  const nodes=ids.map(id=>{ const en=entity(id), t=idType(id), p=geo[id]; return (t&&en)?{type:t,data:cp(en),x:p?p.x:0,y:p?p.y:0,oldId:id}:null; }).filter(Boolean);
+  const links=model.links.filter(l=>ids.includes(l.from)&&ids.includes(l.to)).map(l=>cp(l));
+  return {nodes,links};
+}
+function pasteSnapshot(snap,offX,offY){ const idMap={}, newIds=[], newSubs=[], newClouds=[], cp=o=>JSON.parse(JSON.stringify(o));
+  snap.nodes.forEach(n=>{ const d=cp(n.data), nx=Math.round(n.x+offX), ny=Math.round(n.y+offY);
+    if(n.type==="device"){ const id=uid("d"); idMap[n.oldId]=id; d.id=id;d.x=nx;d.y=ny; model.devices.push(d); newIds.push(id); }
+    else if(n.type==="svc"){ const id=uid("sv"); idMap[n.oldId]="svc:"+id; d.id=id;d.x=nx;d.y=ny; mgmtSvcs().push(d); newIds.push("svc:"+id); }
+    else if(n.type==="text"){ const id=uid("t"); idMap[n.oldId]="text:"+id; d.id=id;d.x=nx;d.y=ny; (model.texts=model.texts||[]).push(d); newIds.push("text:"+id); }
+    else if(n.type==="group"){ const id=uid("gr"); idMap[n.oldId]="group:"+id; d.id=id;d.x=nx;d.y=ny; (model.groups=model.groups||[]).push(d); newIds.push("group:"+id); }
+    else if(n.type==="subnet"){ const id=uid("s"); idMap[n.oldId]=id; d.id=id;d.x=nx;d.y=ny; model.subnets.push(d); newSubs.push(d); newIds.push(id); }
+    else if(n.type==="cloud"){ const id=uid("c"); idMap[n.oldId]=id; d.id=id;d.x=nx;d.y=ny; model.clouds.push(d); newClouds.push(d); newIds.push(id); }
+  });
+  newSubs.forEach(su=>{ if(idMap[su.anchor]) su.anchor=idMap[su.anchor]; });      // reattach to clone if its device was copied
+  newClouds.forEach(c=>{ if(idMap[c.anchor]) c.anchor=idMap[c.anchor]; });
+  (snap.links||[]).forEach(l=>{ if(idMap[l.from]&&idMap[l.to]){ const nl=cp(l); nl.id=uid("l"); nl.from=idMap[l.from]; nl.to=idMap[l.to]; model.links.push(nl); } });
+  return newIds;
+}
+function duplicateSelection(){ const ids=[...selected]; if(!ids.length) return; pushUndo();
+  selected=new Set(pasteSnapshot(snapshotSelection(ids),40,40)); selectedLink=null; render(); }
+function copySelection(){ const ids=[...selected]; if(!ids.length) return; clipboard=snapshotSelection(ids); }
+function pasteClipboard(){ if(!clipboard||!clipboard.nodes.length) return; pushUndo();
+  const c=viewCenterWorld(), n=clipboard.nodes, cx=n.reduce((s,x)=>s+x.x,0)/n.length, cy=n.reduce((s,x)=>s+x.y,0)/n.length;
+  selected=new Set(pasteSnapshot(clipboard,c.x-cx,c.y-cy)); selectedLink=null; render(); }
 /* ---- suggested connections for the selected device ---- */
 function renderSuggestions(){
   const sec=document.getElementById("suggest-section"), box=document.getElementById("suggest"); if(!sec) return;
@@ -1628,6 +1656,9 @@ window.addEventListener("keydown",e=>{
   const meta=e.metaKey||e.ctrlKey;
   if(meta && e.key.toLowerCase()==="z"){ e.preventDefault(); e.shiftKey?redo():undo(); }
   else if(meta && e.key.toLowerCase()==="y"){ e.preventDefault(); redo(); }
+  else if(meta && e.key.toLowerCase()==="d"){ e.preventDefault(); duplicateSelection(); }
+  else if(meta && e.key.toLowerCase()==="c"){ if(selected.size){ e.preventDefault(); copySelection(); } }
+  else if(meta && e.key.toLowerCase()==="v"){ if(clipboard){ e.preventDefault(); pasteClipboard(); } }
 });
 
 buildResources();
