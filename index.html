@@ -341,9 +341,11 @@ function computeGeometry(){
   (model.mgmt.services||[]).forEach(sv=>{ if(!pinned(sv)){ const L=sv.type==="vcg"?3:5; (layers[L]=layers[L]||[]).push({id:"svc:"+sv.id,svc:sv}); } });
   // adjacency for barycenter ordering
   const nbr={}; model.links.forEach(l=>{ (nbr[l.from]=nbr[l.from]||[]).push(l.to); (nbr[l.to]=nbr[l.to]||[]).push(l.from); });
-  // compact Y: only occupied tiers get a row, so empty layers leave no gap (lower layer index = lower on screen)
-  const occupied=Object.keys(layers).map(Number).sort((a,b)=>a-b), GAP=210, BASE=820, yFor={};
-  occupied.forEach((L,i)=>{ yFor[L]=BASE-i*GAP; });
+  // compact Y: only occupied tiers get a row (lower index = lower on screen); gap widens only around tiers with subnets
+  const occupied=Object.keys(layers).map(Number).sort((a,b)=>a-b), BASE=820, yFor={};
+  const subnetLayer={}; model.subnets.forEach(su=>{ const d=dev(su.anchor); if(d) subnetLayer[nodeLayer(d.kind)]=true; });
+  let cum=0;
+  occupied.forEach((L,i)=>{ if(i>0){ const prev=occupied[i-1]; cum += (subnetLayer[prev]||subnetLayer[L]) ? 240 : 150; } yFor[L]=BASE-cum; });
   const placeLayer=L=>{ const arr=layers[L]; if(!arr||!arr.length) return;
     arr.forEach(nd=>{ let sum=0,c=0; (nbr[nd.id]||[]).forEach(o=>{ if(posX[o]!=null){sum+=posX[o];c++;} }); nd._b=c?sum/c:LCX; });
     arr.sort((a,b)=>a._b-b._b);
