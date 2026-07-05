@@ -112,7 +112,14 @@
       <button class="btn sec" onclick="toggleResources(event)">Velocloud resources ▾</button>
       <div class="menu" id="res-menu"></div>
     </div>
-    <button class="btn sec" onclick="resetModel()">Reset to sample</button>
+    <div class="dropdown">
+      <button class="btn sec" onclick="toggleExport(event)">Export ▾</button>
+      <div class="menu" id="exp-menu" style="min-width:150px">
+        <a href="#" onclick="exportImage('png');return false">Export as PNG</a>
+        <a href="#" onclick="exportImage('svg');return false">Export as SVG</a>
+      </div>
+    </div>
+    <button class="btn sec" onclick="resetModel()">Reset</button>
     <button class="btn sec" onclick="clearCanvas()" style="background:#fde8e8;color:#b91c1c">Clear canvas</button>
   </div>
 </header>
@@ -155,6 +162,7 @@
       <button id="con-solid" onclick="setConnect('solid')" title="Solid connector — click two nodes" style="font-size:17px">—</button>
       <button id="con-dotted" onclick="setConnect('dotted')" title="Dotted connector — click two nodes" style="font-size:15px">┄</button>
       <button id="tool-text" onclick="setTextMode()" title="Add text box — then click on the canvas" style="font-weight:700">T</button>
+      <button onclick="addGroup()" title="Add group / region container" style="font-size:15px">▢</button>
     </div>
     <div class="canvas">
       <div id="stage">
@@ -275,8 +283,9 @@ function computeGeometry(){
   // place from the hub tier outward so each layer aligns to the already-placed neighbours
   [2,1,1.5,3,0,4,5].forEach(placeLayer);
 
-  // text boxes (always manually positioned)
+  // text boxes + group containers (always manually positioned)
   (model.texts||[]).forEach(t=>{ pos["text:"+t.id]={x:t.x!=null?t.x:LCX, y:t.y!=null?t.y:LAYER_Y[3], ptype:"text", node:t}; });
+  (model.groups||[]).forEach(g=>{ pos["group:"+g.id]={x:g.x,y:g.y,w:g.w,h:g.h,ptype:"group",node:g}; });
 
   // attach subnets/clouds on the side of a device AWAY from its links (avoids overlap)
   const off={};
@@ -564,6 +573,13 @@ function render(){
   const _pwX=world?world.minX:null, _pwY=world?world.minY:null;   // origin before this render (for scroll compensation)
   const pos=computeGeometry();
   let s="", linkBadges="";
+  // group/region containers (drawn behind everything; grab by header or border so interior stays clickable)
+  (model.groups||[]).forEach(g=>{ const P=pos["group:"+g.id]; if(!P) return; const col=g.color||"#6b7280", gx=P.x-P.w/2, gy=P.y-P.h/2, lbl=g.label||"Group";
+    const hbW=Math.min(P.w-6, lbl.length*7.2+18);
+    s+=`<g class="node" data-id="group:${g.id}">`
+      +`<rect x="${gx}" y="${gy}" width="${P.w}" height="${P.h}" rx="10" fill="${col}" fill-opacity="0.05" stroke="${col}" stroke-width="1.5" stroke-dasharray="7 5" pointer-events="stroke" style="cursor:move"/>`
+      +`<rect x="${gx}" y="${gy}" width="${hbW}" height="22" rx="6" fill="${col}" style="cursor:move"/>`
+      +`<text x="${gx+9}" y="${gy+15}" font-size="12" font-weight="700" fill="#fff" style="cursor:move">${esc(lbl)}</text></g>`; });
   // links (under nodes) — wrapped so they can be selected & deleted
   model.links.forEach(l=>{ const a=pos[l.from],b=pos[l.to]; if(!a||!b) return;
     const sel=selectedLink===l.id, mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
@@ -602,21 +618,21 @@ function render(){
   selected.forEach(id=>{ const p=pos[id]; if(!p) return;
     const k=scaleOf(p);
     const txtHW=p.ptype==="text"?Math.max(30,(p.node.text||"Text").length*(p.node.size||16)*0.31)+8:0;
-    let hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="text"?txtHW:p.ptype==="svc"?32:p.ptype==="cloud"?86:(p.kind==="cluster"?74:p.kind?50:64);
-    let hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="text"?((p.node.size||16)+8):p.ptype==="svc"?44:p.ptype==="cloud"?38:(p.kind==="cluster"?46:p.kind?52:24);
+    let hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="group"?p.w/2+2:p.ptype==="text"?txtHW:p.ptype==="svc"?32:p.ptype==="cloud"?86:(p.kind==="cluster"?74:p.kind?50:64);
+    let hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="group"?p.h/2+2:p.ptype==="text"?((p.node.size||16)+8):p.ptype==="svc"?44:p.ptype==="cloud"?38:(p.kind==="cluster"?46:p.kind?52:24);
     hw*=k; hh*=k;                                          // selection box tracks the node's scale
     s+=`<rect x="${p.x-hw}" y="${p.y-hh}" width="${hw*2}" height="${hh*2}" rx="10" fill="rgba(37,99,235,.08)" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 3"/>`;
     if(single && p.ptype!=="plane"){                       // resize handle (bottom-right)
       selBadges+=`<g class="resize-handle" data-id="${id}" style="cursor:nwse-resize"><title>Drag to resize</title>`
         +`<rect x="${p.x+hw-6}" y="${p.y+hh-6}" width="12" height="12" rx="2" fill="#2563eb" stroke="#fff" stroke-width="1.5"/></g>`;
     }
-    if(single && (p.kind==="hub"||p.kind==="spoke"||p.kind==="cluster"||p.ptype==="subnet")){   // recolor device / subnet
+    if(single && (p.kind==="hub"||p.kind==="spoke"||p.kind==="cluster"||p.ptype==="subnet"||p.ptype==="group")){   // recolor device / subnet / group
       const cols=[["Green","#57bf5b"],["Blue","#2b9fd8"],["Gray","#9aa0a6"]], cyc=p.y+hh+16, sxx=p.x-(cols.length-1)*12;
       cols.forEach(([nm,col],i)=>{ const cx=sxx+i*24;
         selBadges+=`<g class="node-color" data-id="${id}" data-color="${col}" style="cursor:pointer"><title>${nm}</title>`
           +`<circle cx="${cx}" cy="${cyc}" r="8" fill="${col}" stroke="#fff" stroke-width="1.5"/></g>`; });
     }
-    if(dev(id)||model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)||id.startsWith("svc:")||id.startsWith("plane:")||id.startsWith("text:")){
+    if(dev(id)||model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)||id.startsWith("svc:")||id.startsWith("plane:")||id.startsWith("text:")||id.startsWith("group:")){
       const bx=p.x+hw-4, by=p.y-hh+10, ex=bx-22;
       selBadges+=`<g class="edit-badge" data-id="${id}" style="cursor:pointer"><title>Edit label</title>`
         +`<circle cx="${ex}" cy="${by}" r="9" fill="#2563eb" stroke="#fff" stroke-width="1.5"/>`
@@ -655,8 +671,8 @@ function render(){
   // bounds -> viewBox (allows negative coords for clouds above planes)
   let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
   Object.values(pos).forEach(p=>{
-    const hw=p.ptype==="plane"?p.mW/2:p.ptype==="cloud"?80:(p.kind==="cluster"?74:p.kind?60:80);
-    const hh=p.ptype==="plane"?p.mH/2:p.ptype==="cloud"?32:(p.kind==="cluster"?52:p.kind?66:30);
+    const hw=p.ptype==="plane"?p.mW/2:p.ptype==="group"?p.w/2:p.ptype==="cloud"?80:(p.kind==="cluster"?74:p.kind?60:80);
+    const hh=p.ptype==="plane"?p.mH/2:p.ptype==="group"?p.h/2:p.ptype==="cloud"?32:(p.kind==="cluster"?52:p.kind?66:30);
     minX=Math.min(minX,p.x-hw); maxX=Math.max(maxX,p.x+hw);
     minY=Math.min(minY,p.y-hh); maxY=Math.max(maxY,p.y+hh); });
   if(!isFinite(minX)){ minX=0;minY=0;maxX=560;maxY=360; }
@@ -667,7 +683,7 @@ function render(){
   else { world.minX=Math.min(world.minX,minX); world.minY=Math.min(world.minY,minY);
          world.maxX=Math.max(world.maxX,maxX); world.maxY=Math.max(world.maxY,maxY); }
   const vX=world.minX, vY=world.minY, W=world.maxX-world.minX, H=world.maxY-world.minY;
-  const hasContent = model.devices.length || model.subnets.length || model.clouds.length || (model.mgmt.services||[]).length || model.mgmt.planes.length;
+  const hasContent = model.devices.length || model.subnets.length || model.clouds.length || (model.mgmt.services||[]).length || model.mgmt.planes.length || (model.texts||[]).length || (model.groups||[]).length;
   if(!hasContent)
     s+=`<text x="${vX+W/2}" y="${vY+H/2-10}" text-anchor="middle" font-size="16" fill="#9ca3af">Blank canvas</text>`
       +`<text x="${vX+W/2}" y="${vY+H/2+14}" text-anchor="middle" font-size="12" fill="#c0c4cc">Add a device from the left panel to begin</text>`;
@@ -706,11 +722,13 @@ function mgmtSvcs(){ return model.mgmt.services||(model.mgmt.services=[]); }
 function entity(id){ if(id.startsWith("plane:")) return model.mgmt.planes.find(p=>p.id===id.slice(6));
   if(id.startsWith("svc:")){ const sid=id.slice(4); return mgmtSvcs().find(v=>v.id===sid)||null; }
   if(id.startsWith("text:")){ const tid=id.slice(5); return (model.texts||[]).find(t=>t.id===tid)||null; }
+  if(id.startsWith("group:")){ const gid=id.slice(6); return (model.groups||[]).find(g=>g.id===gid)||null; }
   return model.devices.find(d=>d.id===id)||model.subnets.find(s=>s.id===id)||model.clouds.find(c=>c.id===id); }
 function selectableIds(){ return [
   ...model.devices.map(d=>d.id), ...model.subnets.map(s=>s.id),
   ...model.clouds.map(c=>c.id), ...model.mgmt.planes.map(p=>"plane:"+p.id),
-  ...mgmtSvcs().map(s=>"svc:"+s.id), ...(model.texts||[]).map(t=>"text:"+t.id) ]; }
+  ...mgmtSvcs().map(s=>"svc:"+s.id), ...(model.texts||[]).map(t=>"text:"+t.id),
+  ...(model.groups||[]).map(g=>"group:"+g.id) ]; }
 function freezeLayout(){                                  // pin every auto-positioned node so dragging one won't reflow others
   const geo=computeGeometry();
   model.devices.forEach(d=>{ if(d.x==null||d.y==null){ const g=geo[d.id]; if(g){d.x=g.x;d.y=g.y;} } });
@@ -724,7 +742,9 @@ function bindDrag(svg){
       panning={sx:e.clientX,sy:e.clientY,sl:c.scrollLeft,st:c.scrollTop}; c.style.cursor="grabbing"; return; }
     const rh=e.target.closest(".resize-handle");
     if(rh){ e.preventDefault(); e.stopPropagation(); const id=rh.dataset.id, en=entity(id), gp=computeGeometry()[id];
-      if(en&&gp){ const loc=svgPoint(svg,e); resizing={id,cx:gp.x,cy:gp.y,startScale:en.scale||1,startDist:Math.max(1,Math.hypot(loc.x-gp.x,loc.y-gp.y))}; } return; }
+      if(en&&gp){ const loc=svgPoint(svg,e);
+        if(id.startsWith("group:")) resizing={id,group:true,tlx:gp.x-gp.w/2,tly:gp.y-gp.h/2};
+        else resizing={id,cx:gp.x,cy:gp.y,startScale:en.scale||1,startDist:Math.max(1,Math.hypot(loc.x-gp.x,loc.y-gp.y))}; } return; }
     const lcol=e.target.closest(".link-color");
     if(lcol){ e.preventDefault(); e.stopPropagation(); pushUndo(); const l=model.links.find(x=>x.id===lcol.dataset.lid); if(l){ l.color=lcol.dataset.color; render(); } return; }
     const ncol=e.target.closest(".node-color");
@@ -775,8 +795,12 @@ function bindDrag(svg){
   window.addEventListener("pointermove",e=>{
     if(panning){ const c=document.querySelector(".canvas"); if(c){ c.scrollLeft=panning.sl-(e.clientX-panning.sx); c.scrollTop=panning.st-(e.clientY-panning.sy); } return; }
     if(resizing){ const svg=document.getElementById("topo"); if(!svg) return; const loc=svgPoint(svg,e);
+      const en=entity(resizing.id); if(!en) return;
+      if(!resizing.moved){resizing.moved=true; pushUndo();}
+      if(resizing.group){ const w=Math.max(100,loc.x-resizing.tlx), h=Math.max(70,loc.y-resizing.tly);
+        en.w=Math.round(w); en.h=Math.round(h); en.x=Math.round(resizing.tlx+w/2); en.y=Math.round(resizing.tly+h/2); scheduleRender(); return; }
       let k=resizing.startScale*(Math.hypot(loc.x-resizing.cx,loc.y-resizing.cy)/resizing.startDist); k=Math.max(0.4,Math.min(3,k));
-      const en=entity(resizing.id); if(en){ if(!resizing.moved){resizing.moved=true; pushUndo();} en.scale=Math.round(k*100)/100; scheduleRender(); } return; }
+      en.scale=Math.round(k*100)/100; scheduleRender(); return; }
     if(drag){ const dux=(e.clientX-drag.sx)/zoom, duy=(e.clientY-drag.sy)/zoom;   // screen delta ÷ zoom = stable user delta
       if(!drag.moved && (Math.abs(e.clientX-drag.sx)>2||Math.abs(e.clientY-drag.sy)>2)){ drag.moved=true; pushUndo(); }
       drag.ids.forEach(id=>{ const en=entity(id), s=drag.start[id]; if(en&&s){ en.x=s.x+dux; en.y=s.y+duy; } });
@@ -811,6 +835,7 @@ function editNodeInline(id){                              // inline edit of a no
   const en=entity(id); if(!en) return;
   let get,set;
   if(id.startsWith("text:")){ get=()=>en.text; set=v=>en.text=v||"Text"; }
+  else if(id.startsWith("group:")){ get=()=>en.label; set=v=>{ if(v) en.label=v; }; }
   else if(id.startsWith("svc:")||dev(id)){ get=()=>en.label; set=v=>{ if(v) en.label=v; }; }
   else if(model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)){ get=()=>en.cidr; set=v=>{ if(v) en.cidr=v; }; }  // edit CIDR
   else { editSelectedEntity(id); return; }               // plane -> field editor
@@ -834,6 +859,7 @@ function editSelectedEntity(id){
 function deleteSelectedEntity(id){
   pushUndo();
   if(id.startsWith("text:")){ model.texts=(model.texts||[]).filter(t=>"text:"+t.id!==id); }
+  else if(id.startsWith("group:")){ model.groups=(model.groups||[]).filter(g=>"group:"+g.id!==id); }
   else if(id.startsWith("plane:")){ const pid=id.slice(6);       // delete ONLY the box; gateways/VCOs stay
     model.mgmt.planes=model.mgmt.planes.filter(p=>p.id!==pid);
   } else if(id.startsWith("svc:")){ model.mgmt.services=mgmtSvcs().filter(v=>"svc:"+v.id!==id);
@@ -1033,6 +1059,11 @@ function addPlaneBox(which){                              // add a standalone pl
   const c=viewCenterWorld();
   model.mgmt.planes.push({id:uid("pl"),label:which==="cdp"?"Control and Data Plane":"Management Plane",services:[],x:c.x,y:c.y});
   render();
+}
+function addGroup(){                                      // add a labeled group/region container
+  pushUndo(); const c=viewCenterWorld();
+  const g={id:uid("gr"),label:"Group",x:c.x,y:c.y,w:340,h:230,color:"#6b7280"};
+  (model.groups=model.groups||[]).push(g); selected=new Set(["group:"+g.id]); selectedLink=null; render();
 }
 function setTextMode(){                                   // toggle click-to-place text tool
   textMode=!textMode; connectMode=null; connectFrom=null; setConnectButtons();
@@ -1309,7 +1340,31 @@ function buildResources(){
     sec.items.map(([label,path])=>`<a href="${path.startsWith("http")?path:RES_BASE+path}" target="_blank" rel="noopener">${esc(label)}</a>`).join("")
   ).join("");
 }
-function toggleResources(e){ e.stopPropagation(); document.getElementById("tpl-menu")?.classList.remove("open"); document.getElementById("res-menu").classList.toggle("open"); }
+function toggleResources(e){ e.stopPropagation(); document.getElementById("tpl-menu")?.classList.remove("open"); document.getElementById("exp-menu")?.classList.remove("open"); document.getElementById("res-menu").classList.toggle("open"); }
+function toggleExport(e){ e.stopPropagation(); document.getElementById("tpl-menu")?.classList.remove("open"); document.getElementById("res-menu")?.classList.remove("open"); document.getElementById("exp-menu").classList.toggle("open"); }
+document.addEventListener("click",()=>document.getElementById("exp-menu")?.classList.remove("open"));
+const SVG_VARS={'--hub':'#57bf5b','--spoke':'#2b9fd8','--subnet':'#eaf4ff','--subnet-b':'#2f80c9','--cloud':'#fff4e0','--cloud-b':'#e0a94b','--mgmt':'#f4f4f4','--mgmt-b':'#9aa0a6','--sdwan':'#159957','--ipsec':'#d97706','--direct':'#6b7280','--interconnect':'#7c3aed','--firewall':'#f4685f','--text':'#1f2937'};
+function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); }
+function exportImage(fmt){
+  document.getElementById("exp-menu")?.classList.remove("open");
+  const ps=selected, pl=selectedLink, pw=world, pz=zoom;
+  selected=new Set(); selectedLink=null; connectFrom=null; world=null; zoom=1; render();   // clean + tight, 1:1
+  const svgEl=document.getElementById("topo"); if(!svgEl){ selected=ps; selectedLink=pl; world=pw; zoom=pz; render(); return; }
+  const vb=(svgEl.getAttribute("viewBox")||"0 0 800 600").split(/\s+/).map(Number);
+  svgEl.setAttribute("width",vb[2]); svgEl.setAttribute("height",vb[3]);              // natural size for export
+  let str=svgEl.outerHTML;
+  for(const [k,v] of Object.entries(SVG_VARS)) str=str.split(`var(${k})`).join(v);
+  if(!/xmlns=/.test(str)) str=str.replace("<svg","<svg xmlns=\"http://www.w3.org/2000/svg\"");
+  str=str.replace(/(<svg[^>]*>)/, `$1<rect x="${vb[0]}" y="${vb[1]}" width="${vb[2]}" height="${vb[3]}" fill="#ffffff"/>`);
+  selected=ps; selectedLink=pl; world=pw; zoom=pz; render();                          // restore view
+  if(fmt==="svg"){ dlBlob(new Blob([str],{type:"image/svg+xml"}),"topology.svg"); return; }
+  const scale=2, img=new Image();
+  img.onload=()=>{ const c=document.createElement("canvas"); c.width=vb[2]*scale; c.height=vb[3]*scale;
+    const ctx=c.getContext("2d"); ctx.scale(scale,scale); ctx.drawImage(img,0,0);
+    c.toBlob(b=>{ if(b) dlBlob(b,"topology.png"); },"image/png"); };
+  img.onerror=()=>alert("PNG export failed — try Export as SVG.");
+  img.src="data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(str)));
+}
 document.addEventListener("click",()=>document.getElementById("res-menu")?.classList.remove("open"));
 
 /* ================= ZOOM / FIT ========================================= */
@@ -1419,7 +1474,7 @@ function applyTemplate(name){ const t=TEMPLATES[name]; if(!t) return;
   document.getElementById("tpl-menu")?.classList.remove("open");
   if(model.devices.length && !confirm("Replace the current canvas with the "+t.label+" template?")) return;
   pushUndo(); model=t.build(); selected=new Set(); zoom=1; world=null; render(); centerScroll(); }
-function toggleTemplates(e){ e.stopPropagation(); document.getElementById("res-menu")?.classList.remove("open"); document.getElementById("tpl-menu").classList.toggle("open"); }
+function toggleTemplates(e){ e.stopPropagation(); document.getElementById("res-menu")?.classList.remove("open"); document.getElementById("exp-menu")?.classList.remove("open"); document.getElementById("tpl-menu").classList.toggle("open"); }
 document.addEventListener("click",()=>document.getElementById("tpl-menu")?.classList.remove("open"));
 
 window.addEventListener("keyup",e=>{ if(e.code==="Space"){ spaceDown=false; const c=document.querySelector(".canvas"); if(c&&!panning) c.style.cursor=""; } });
@@ -1431,6 +1486,7 @@ window.addEventListener("keydown",e=>{
     if(selectedLink){ e.preventDefault(); delLink(selectedLink); return; }
     if(selected.size){ e.preventDefault(); pushUndo(); [...selected].forEach(id=>{
       if(id.startsWith("text:")){ model.texts=(model.texts||[]).filter(t=>"text:"+t.id!==id); }
+      else if(id.startsWith("group:")){ model.groups=(model.groups||[]).filter(g=>"group:"+g.id!==id); }
       else if(id.startsWith("plane:")){ const pid=id.slice(6); model.mgmt.planes=model.mgmt.planes.filter(p=>p.id!==pid); }
       else if(id.startsWith("svc:")){ model.mgmt.services=mgmtSvcs().filter(v=>"svc:"+v.id!==id);
         model.links=model.links.filter(l=>l.from!==id&&l.to!==id); model.clouds=model.clouds.filter(c=>c.anchor!==id); }
