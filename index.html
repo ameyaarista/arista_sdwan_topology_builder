@@ -752,10 +752,8 @@ function bindDrag(svg){
       if(!penColor) startMarquee(e);                       // empty canvas -> rubber-band
     }
   });
-  svg.addEventListener("dblclick",e=>{ const g=e.target.closest(".node"); if(!g) return;
-    const id=g.dataset.id;
-    if(id.startsWith("text:")){ editSelectedEntity(id); return; }                  // dbl-click text = edit
-    const en=entity(id); if(en){delete en.x;delete en.y;render();} });              // dbl-click = reset to auto
+  svg.addEventListener("dblclick",e=>{ const g=e.target.closest(".node"); if(!g) return;   // dbl-click = edit label inline
+    editNodeInline(g.dataset.id); });
   if(winBound) return; winBound=true;
   window.addEventListener("pointermove",e=>{
     if(panning){ const c=document.querySelector(".canvas"); if(c){ c.scrollLeft=panning.sl-(e.clientX-panning.sx); c.scrollTop=panning.st-(e.clientY-panning.sy); } return; }
@@ -792,6 +790,21 @@ function updateMarquee(e){
 }
 function endMarquee(){ if(!marquee) return; marquee.div.remove(); marquee=null; render(); }
 function clearSelection(){ if(selected.size||selectedLink){ selected=new Set(); selectedLink=null; render(); } }
+function editNodeInline(id){                              // inline edit of a node's label/text at the node
+  const en=entity(id); if(!en) return;
+  let get,set;
+  if(id.startsWith("text:")){ get=()=>en.text; set=v=>en.text=v||"Text"; }
+  else if(id.startsWith("svc:")||dev(id)){ get=()=>en.label; set=v=>{ if(v) en.label=v; }; }
+  else { editSelectedEntity(id); return; }               // subnet/cloud/plane -> field editor
+  const geo=computeGeometry(), p=geo[id], svg=document.getElementById("topo"); if(!p||!svg) return;
+  const pt=svg.createSVGPoint(); pt.x=p.x; pt.y=p.y; const sp=pt.matrixTransform(svg.getScreenCTM());
+  const inp=document.createElement("input"); inp.type="text"; inp.value=get();
+  inp.style.cssText=`position:fixed;left:${sp.x-70}px;top:${sp.y+16}px;z-index:200;width:140px;font-size:13px;font-weight:600;text-align:center;padding:2px 6px;border:1px solid #2563eb;border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.15)`;
+  document.body.appendChild(inp); inp.focus(); inp.select(); let done=false;
+  const finish=()=>{ if(done) return; done=true; pushUndo(); set(inp.value.trim()); inp.remove(); render(); };
+  inp.addEventListener("keydown",ev=>{ ev.stopPropagation(); if(ev.key==="Enter") finish(); else if(ev.key==="Escape"){ done=true; inp.remove(); } });
+  inp.addEventListener("blur",finish);
+}
 function editSelectedEntity(id){
   if(id.startsWith("text:")){ const t=entity(id); if(t){ const v=prompt("Text:",t.text); if(v===null) return; pushUndo(); t.text=v.trim()||t.text; render(); } return; }
   if(id.startsWith("plane:")){ const pl=model.mgmt.planes.find(p=>"plane:"+p.id===id); if(pl){ const n=prompt("Plane name:",pl.label); if(n!==null){ pushUndo(); pl.label=n.trim()||pl.label; render(); } } return; }
