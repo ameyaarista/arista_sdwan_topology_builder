@@ -1043,17 +1043,21 @@ function buildPalette(){
     `<rect x="1" y="4" width="44" height="20" rx="5" fill="none" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="3 2"/>`
     +edgeIcon(13,14,8,'var(--hub)')+edgeIcon(33,14,8,'var(--hub)'),40);
   const groups=[
-    {items:[
+    {label:"SD-WAN Devices", items:[
       ["Spoke","addDevice('spoke')",paletteSvg("0 0 28 28",edgeIcon(14,14,11,'var(--spoke)'))],
       ["Hub","addDevice('hub')",paletteSvg("0 0 28 28",edgeIcon(14,14,11,'var(--hub)'))],
+      ["Cluster","addDevice('cluster')",clusterIc],
       ["AWS Hub","addDevice('hub','aws')",cloudHubIcon('aws')],
       ["Azure Hub","addDevice('hub','azure')",cloudHubIcon('azure')],
       ["GCP Hub","addDevice('hub','gcp')",cloudHubIcon('gcp')],
-      ["Cluster","addDevice('cluster')",clusterIc],
-      ["Firewall","addDevice('firewall')",paletteSvg("0 0 28 28",firewallIcon(14,14,11,'var(--firewall)'))],
       ["Virtual WAN","addDevice('vwan')",paletteSvg("0 0 28 28",vwanIcon(14,14,11))],
+    ]},
+    {label:"Network Devices", items:[
       ["Router","addDevice('router')",paletteSvg("0 0 28 28",routerIcon(14,14,11))],
       ["Switch","addDevice('switch')",paletteSvg("0 0 28 28",switchIcon(14,14,11))],
+      ["Firewall","addDevice('firewall')",paletteSvg("0 0 28 28",firewallIcon(14,14,11,'var(--firewall)'))],
+    ]},
+    {label:"Management", items:[
       ["VCO","addMgmt('vco')",paletteSvg("0 0 28 28",vcoIcon(14,14,11))],
       ["VCG","addMgmt('vcg')",paletteSvg("0 0 28 28",vcgIcon(14,14,11))],
     ]},
