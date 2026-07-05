@@ -191,6 +191,14 @@
       </div>
     </div>
 
+    <div class="section">
+      <h2>Drive Search</h2>
+      <div class="row">
+        <input id="drive-q" placeholder="search Google Drive" onkeydown="if(event.key==='Enter')openDrive()">
+        <button class="btn sec" style="width:auto" onclick="openDrive()">Search ↗</button>
+      </div>
+    </div>
+
     <div class="section" id="text-section" style="display:none">
       <h2>Text</h2>
       <label>Font size</label>
@@ -1261,6 +1269,8 @@ function addPlaneBox(which){                              // add a standalone pl
 function toggleSnap(){ snapGrid=!snapGrid; const b=document.getElementById("tool-grid"); if(b) b.classList.toggle("act",snapGrid); }
 function openBug(){ const el=document.getElementById("bug-id"), v=(el&&el.value||"").trim(); if(!v) return;
   window.open("https://bb.infra.corp.arista.io/bug/"+encodeURIComponent(v),"_blank","noopener"); }
+function openDrive(){ const el=document.getElementById("drive-q"), v=(el&&el.value||"").trim(); if(!v) return;
+  window.open("https://drive.google.com/drive/search?q="+encodeURIComponent(v),"_blank","noopener"); }
 function addGroup(){                                      // add a labeled group/region container
   pushUndo(); const c=viewCenterWorld();
   const g={id:uid("gr"),label:"Group",x:c.x,y:c.y,w:340,h:230,color:"#6b7280"};
