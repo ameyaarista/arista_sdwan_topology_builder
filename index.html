@@ -583,7 +583,8 @@ function render(){
           +`<circle cx="${cx}" cy="${cyc}" r="7" fill="${col}" stroke="#fff" stroke-width="1.5"/></g>`; });
     }
   });
-  model.subnets.forEach(su=>{ const a=pos[su.anchor],p=pos[su.id]; if(a&&p) s+=linkLine(a,{x:p.x,y:p.y+(p.y<a.y?18:-18)},"direct").split("<rect")[0]; });
+  model.subnets.forEach(su=>{ const a=pos[su.anchor],p=pos[su.id]; if(a&&p){ const y2=p.y+(p.y<a.y?18:-18);
+    s+=`<line x1="${a.x}" y1="${a.y}" x2="${p.x}" y2="${y2}" stroke="var(--direct)" stroke-width="2"/>`; } });
   model.clouds.forEach(c=>{ const a=pos[c.anchor],p=pos[c.id]; if(a&&p) s+=`<line x1="${a.x}" y1="${a.y}" x2="${p.x}" y2="${p.y+(p.y<a.y?26:-26)}" stroke="var(--cloud-b)" stroke-width="2"/>`; });
   // selection halos (under nodes) + delete badges (collected, drawn on top)
   let selBadges="";
