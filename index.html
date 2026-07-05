@@ -684,6 +684,7 @@ let selectedLink=null;       // id of selected connection
 let marquee=null;            // active rubber-band selection
 let panning=null, spaceDown=false;   // Space/middle-drag to pan the canvas
 let resizing=null;                   // active node resize
+let lastTap=null;                    // manual double-click detection (DOM is rebuilt each click)
 let connectMode=null, connectFrom=null;   // manual connector tool (solid/dotted)
 let textMode=false;                        // click-to-place text box tool
 function svgPoint(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
@@ -732,13 +733,15 @@ function bindDrag(svg){
     const lbadge=e.target.closest(".link-del-badge");
     if(lbadge){ e.preventDefault(); e.stopPropagation(); delLink(lbadge.dataset.lid); return; }
     const ebadge=e.target.closest(".edit-badge");
-    if(ebadge){ e.preventDefault(); e.stopPropagation(); editSelectedEntity(ebadge.dataset.id); return; }
+    if(ebadge){ e.preventDefault(); e.stopPropagation(); editNodeInline(ebadge.dataset.id); return; }
     const badge=e.target.closest(".del-badge");
     if(badge){ e.preventDefault(); e.stopPropagation(); deleteSelectedEntity(badge.dataset.id); return; }
     const g=e.target.closest(".node");
     if(g){
       selectedLink=null;
-      const id=g.dataset.id;
+      const id=g.dataset.id, now=Date.now();
+      if(lastTap && lastTap.id===id && now-lastTap.t<350){ lastTap=null; e.preventDefault(); editNodeInline(id); return; }   // double-click = edit
+      lastTap={id,t:now};
       if(e.shiftKey){ selected.has(id)?selected.delete(id):selected.add(id); render(); return; }
       if(!selected.has(id)) selected=new Set([id]);       // fresh single selection
       freezeLayout();                                     // lock arrangement so other nodes stay put
@@ -752,8 +755,6 @@ function bindDrag(svg){
       if(!penColor) startMarquee(e);                       // empty canvas -> rubber-band
     }
   });
-  svg.addEventListener("dblclick",e=>{ const g=e.target.closest(".node"); if(!g) return;   // dbl-click = edit label inline
-    editNodeInline(g.dataset.id); });
   if(winBound) return; winBound=true;
   window.addEventListener("pointermove",e=>{
     if(panning){ const c=document.querySelector(".canvas"); if(c){ c.scrollLeft=panning.sl-(e.clientX-panning.sx); c.scrollTop=panning.st-(e.clientY-panning.sy); } return; }
