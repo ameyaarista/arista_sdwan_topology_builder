@@ -129,6 +129,7 @@
         <button class="pentool" style="--c:#111827" data-color="#111827" title="Black" onclick="setPen('#111827')"></button>
       </div>
       <button class="btn sec" onclick="clearDrawing()">Clear drawing</button>
+      <button class="btn sec" onclick="addText()" style="margin-top:6px">+ Add text box</button>
     </div>
 
     <div class="section">
@@ -204,7 +205,7 @@ let model = referenceModel();
 const dev = id => model.devices.find(d=>d.id===id);
 const isCore = k => k==="hub" || k==="cluster";       // "core" nodes sit in the top tier
 const isSSE = k => k==="zscaler" || k==="prisma" || k==="netskope";   // SASE/SSE services
-const LEAF = new Set(["spoke","firewall","vwan","zscaler","prisma","netskope","internet","router","switch"]);
+const LEAF = new Set(["spoke","firewall","vwan","zscaler","prisma","netskope","internet","mpls","router","switch"]);
 const hubs = () => model.devices.filter(d=>isCore(d.kind));
 const spokes = () => model.devices.filter(d=>LEAF.has(d.kind));   // leaf nodes (bottom tier)
 function primaryHub(sp){                       // core node this spoke first connects to
@@ -238,7 +239,7 @@ function nodeLayer(kind){
   if(kind==="router"||kind==="switch") return 0;
   if(kind==="spoke"||kind==="firewall") return 1;
   if(kind==="hub"||kind==="cluster") return 2;            // includes AWS/Azure/GCP hubs
-  if(kind==="internet"||kind==="vwan") return 3;
+  if(kind==="internet"||kind==="mpls"||kind==="vwan") return 3;
   if(kind==="zscaler"||kind==="prisma"||kind==="netskope") return 4;
   return 1;
 }
@@ -264,6 +265,9 @@ function computeGeometry(){
       pos[nd.id]= nd.svc ? {x,y,ptype:"svc",svc:nd.svc} : {x,y,kind:nd.kind,node:nd.node}; }); };
   // place from the hub tier outward so each layer aligns to the already-placed neighbours
   [2,1,3,0,4,5].forEach(placeLayer);
+
+  // text boxes (always manually positioned)
+  (model.texts||[]).forEach(t=>{ pos["text:"+t.id]={x:t.x!=null?t.x:LCX, y:t.y!=null?t.y:LAYER_Y[3], ptype:"text", node:t}; });
 
   // attach subnets/clouds on the side of a device AWAY from its links (avoids overlap)
   const off={};
@@ -425,15 +429,18 @@ function netskopeIcon(cx,cy,r){ const f=n=>n.toFixed(1), gy="#5b5b66";
   g+=`<circle cx="${f(cx-0.1*r)}" cy="${f(cy+0.5*r)}" r="${f(0.2*r)}" fill="#ff8a00"/>`;
   g+=`<circle cx="${f(cx+0.42*r)}" cy="${f(cy-0.46*r)}" r="${f(0.2*r)}" fill="none" stroke="#1aa8e0" stroke-width="${f(0.13*r)}"/>`;
   return g; }
-// Internet: blue cloud outline
-function internetIcon(cx,cy,r){ const s=(2.7*r)/24, tx=(cx-12*s).toFixed(2), ty=(cy-13*s).toFixed(2), sw=(1.8/s).toFixed(2);
+// Cloud outline (Internet = blue, MPLS = gray)
+function cloudOutline(cx,cy,r,color){ const s=(2.7*r)/24, tx=(cx-12*s).toFixed(2), ty=(cy-13*s).toFixed(2), sw=(1.8/s).toFixed(2);
   return `<g transform="translate(${tx},${ty}) scale(${s.toFixed(3)})">`
-    +`<path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="#fff" stroke="#0d6efd" stroke-width="${sw}" stroke-linejoin="round"/></g>`; }
-function internetNode(p){
+    +`<path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="#fff" stroke="${color}" stroke-width="${sw}" stroke-linejoin="round"/></g>`; }
+function internetIcon(cx,cy,r){ return cloudOutline(cx,cy,r,"#0d6efd"); }
+function mplsIcon(cx,cy,r){ return cloudOutline(cx,cy,r,"#6b7280"); }
+function cloudLabelNode(p,iconFn,textFill){
   const r=34, lbl=esc(p.node.label);
-  return internetIcon(p.x,p.y,r)
-    +`<text x="${p.x}" y="${p.y+4}" text-anchor="middle" font-size="12" font-weight="600" fill="#1f6bb0">${lbl}</text>`;
+  return iconFn(p.x,p.y,r)+`<text x="${p.x}" y="${p.y+4}" text-anchor="middle" font-size="12" font-weight="600" fill="${textFill}">${lbl}</text>`;
 }
+function internetNode(p){ return cloudLabelNode(p,internetIcon,"#1f6bb0"); }
+function mplsNode(p){ return cloudLabelNode(p,mplsIcon,"#374151"); }
 // Router: blue circle outline with an X
 function routerIcon(cx,cy,r){ const f=n=>n.toFixed(1), col="#0d6efd", d=r*0.42, sw=Math.max(2,r*0.16).toFixed(2);
   return `<circle cx="${cx}" cy="${cy}" r="${f(r)}" fill="#fff" stroke="${col}" stroke-width="${(r*0.13).toFixed(2)}"/>`
@@ -472,6 +479,7 @@ function deviceNode(p){
   if(p.kind==="firewall") return firewallNode(p);
   if(p.kind==="vwan") return vwanNode(p);
   if(p.kind==="internet") return internetNode(p);
+  if(p.kind==="mpls") return mplsNode(p);
   if(p.kind==="router") return simpleNode(p,routerIcon);
   if(p.kind==="switch") return simpleNode(p,switchIcon);
   if(isSSE(p.kind)) return sseNode(p);
@@ -545,10 +553,11 @@ function render(){
   // selection halos (under nodes) + delete badges (collected, drawn on top)
   let selBadges="";
   selected.forEach(id=>{ const p=pos[id]; if(!p) return;
-    const hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="svc"?32:p.ptype==="cloud"?86:(p.kind==="cluster"?74:p.kind?50:64);
-    const hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="svc"?44:p.ptype==="cloud"?38:(p.kind==="cluster"?46:p.kind?52:24);
+    const txtHW=p.ptype==="text"?Math.max(30,(p.node.text||"Text").length*(p.node.size||16)*0.31)+8:0;
+    const hw=p.ptype==="plane"?p.mW/2+8:p.ptype==="text"?txtHW:p.ptype==="svc"?32:p.ptype==="cloud"?86:(p.kind==="cluster"?74:p.kind?50:64);
+    const hh=p.ptype==="plane"?p.mH/2+8:p.ptype==="text"?((p.node.size||16)+8):p.ptype==="svc"?44:p.ptype==="cloud"?38:(p.kind==="cluster"?46:p.kind?52:24);
     s+=`<rect x="${p.x-hw}" y="${p.y-hh}" width="${hw*2}" height="${hh*2}" rx="10" fill="rgba(37,99,235,.08)" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5 3"/>`;
-    if(dev(id)||model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)||id.startsWith("svc:")||id.startsWith("plane:")){
+    if(dev(id)||model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)||id.startsWith("svc:")||id.startsWith("plane:")||id.startsWith("text:")){
       const bx=p.x+hw-4, by=p.y-hh+10, ex=bx-22;
       selBadges+=`<g class="edit-badge" data-id="${id}" style="cursor:pointer"><title>Edit label</title>`
         +`<circle cx="${ex}" cy="${by}" r="9" fill="#2563eb" stroke="#fff" stroke-width="1.5"/>`
@@ -576,6 +585,11 @@ function render(){
   model.subnets.forEach(su=>{ if(pos[su.id]) s+=`<g class="node" data-id="${su.id}" style="cursor:grab">${subnetNode(pos[su.id])}</g>`; });
   model.clouds.forEach(c=>{ if(pos[c.id]) s+=`<g class="node" data-id="${c.id}" style="cursor:grab">${cloudNode(pos[c.id])}</g>`; });
   model.devices.forEach(d=>{ if(pos[d.id]) s+=`<g class="node" data-id="${d.id}" style="cursor:grab">${deviceNode(pos[d.id])}</g>`; });
+  (model.texts||[]).forEach(t=>{ const p=pos["text:"+t.id]; if(!p) return; const sz=t.size||16, txt=t.text||"Text";
+    const w=Math.max(30,txt.length*sz*0.62);
+    s+=`<g class="node" data-id="text:${t.id}" style="cursor:grab">`
+      +`<rect x="${p.x-w/2}" y="${p.y-sz}" width="${w}" height="${sz*1.8}" fill="#000" opacity="0.001"/>`   // hit area
+      +`<text x="${p.x}" y="${p.y+sz*0.35}" text-anchor="middle" font-size="${sz}" font-weight="600" fill="#111827">${esc(txt)}</text></g>`; });
   s+=selBadges+linkBadges;                                  // delete badges above everything
   // bounds -> viewBox (allows negative coords for clouds above planes)
   let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
@@ -626,11 +640,12 @@ function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(()=>{raf=0;
 function mgmtSvcs(){ return model.mgmt.services||(model.mgmt.services=[]); }
 function entity(id){ if(id.startsWith("plane:")) return model.mgmt.planes.find(p=>p.id===id.slice(6));
   if(id.startsWith("svc:")){ const sid=id.slice(4); return mgmtSvcs().find(v=>v.id===sid)||null; }
+  if(id.startsWith("text:")){ const tid=id.slice(5); return (model.texts||[]).find(t=>t.id===tid)||null; }
   return model.devices.find(d=>d.id===id)||model.subnets.find(s=>s.id===id)||model.clouds.find(c=>c.id===id); }
 function selectableIds(){ return [
   ...model.devices.map(d=>d.id), ...model.subnets.map(s=>s.id),
   ...model.clouds.map(c=>c.id), ...model.mgmt.planes.map(p=>"plane:"+p.id),
-  ...mgmtSvcs().map(s=>"svc:"+s.id) ]; }
+  ...mgmtSvcs().map(s=>"svc:"+s.id), ...(model.texts||[]).map(t=>"text:"+t.id) ]; }
 function freezeLayout(){                                  // pin every auto-positioned node so dragging one won't reflow others
   const geo=computeGeometry();
   model.devices.forEach(d=>{ if(d.x==null||d.y==null){ const g=geo[d.id]; if(g){d.x=g.x;d.y=g.y;} } });
@@ -666,7 +681,9 @@ function bindDrag(svg){
     }
   });
   svg.addEventListener("dblclick",e=>{ const g=e.target.closest(".node"); if(!g) return;
-    const en=entity(g.dataset.id); if(en){delete en.x;delete en.y;render();} });   // dbl-click = reset to auto
+    const id=g.dataset.id;
+    if(id.startsWith("text:")){ editSelectedEntity(id); return; }                  // dbl-click text = edit
+    const en=entity(id); if(en){delete en.x;delete en.y;render();} });              // dbl-click = reset to auto
   if(winBound) return; winBound=true;
   window.addEventListener("pointermove",e=>{
     if(panning){ const c=document.querySelector(".canvas"); if(c){ c.scrollLeft=panning.sl-(e.clientX-panning.sx); c.scrollTop=panning.st-(e.clientY-panning.sy); } return; }
@@ -701,6 +718,7 @@ function updateMarquee(e){
 function endMarquee(){ if(!marquee) return; marquee.div.remove(); marquee=null; render(); }
 function clearSelection(){ if(selected.size||selectedLink){ selected=new Set(); selectedLink=null; render(); } }
 function editSelectedEntity(id){
+  if(id.startsWith("text:")){ const t=entity(id); if(t){ const v=prompt("Text:",t.text); if(v===null) return; pushUndo(); t.text=v.trim()||t.text; render(); } return; }
   if(id.startsWith("plane:")){ const pl=model.mgmt.planes.find(p=>"plane:"+p.id===id); if(pl){ const n=prompt("Plane name:",pl.label); if(n!==null){ pushUndo(); pl.label=n.trim()||pl.label; render(); } } return; }
   if(id.startsWith("svc:")){ const sv=entity(id); if(sv){ const l=prompt("Label:",sv.label); if(l===null) return; const ip=prompt("IP:",sv.ip||""); if(ip===null) return; pushUndo(); sv.label=l.trim()||sv.label; sv.ip=ip.trim(); render(); } return; }
   if(dev(id)) editDevice(id);
@@ -709,7 +727,8 @@ function editSelectedEntity(id){
 }
 function deleteSelectedEntity(id){
   pushUndo();
-  if(id.startsWith("plane:")){ const pid=id.slice(6);           // delete ONLY the box; gateways/VCOs stay
+  if(id.startsWith("text:")){ model.texts=(model.texts||[]).filter(t=>"text:"+t.id!==id); }
+  else if(id.startsWith("plane:")){ const pid=id.slice(6);       // delete ONLY the box; gateways/VCOs stay
     model.mgmt.planes=model.mgmt.planes.filter(p=>p.id!==pid);
   } else if(id.startsWith("svc:")){ model.mgmt.services=mgmtSvcs().filter(v=>"svc:"+v.id!==id);
     model.links=model.links.filter(l=>l.from!==id&&l.to!==id); model.clouds=model.clouds.filter(c=>c.anchor!==id);
@@ -822,11 +841,11 @@ function renderSuggestions(){
   const fwTargets=cand.filter(d=>d.kind==="firewall");
   const vwanTargets=cand.filter(d=>d.kind==="vwan");
   const sseTargets=cand.filter(d=>isSSE(d.kind));
-  const inetTargets=cand.filter(d=>d.kind==="internet");
+  const inetTargets=cand.filter(d=>d.kind==="internet"||d.kind==="mpls");
   const rsTargets=cand.filter(d=>d.kind==="router"||d.kind==="switch");
   const gwTargets = [];            // gateways only offered from a device
   if(sd) mgmtSvcs().forEach(sv=>{ if(sv.type==="vcg"){ const gid="svc:"+sv.id; if(!connected.has(gid)) gwTargets.push({id:gid,label:sv.label}); } });
-  const kc=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":k==="firewall"?"#f4685f":k==="vwan"?"#38b6f1":k==="internet"||k==="router"||k==="switch"?"#0d6efd":k==="zscaler"?"#0d6efd":k==="prisma"?"#00c2e8":k==="netskope"?"#ff8a00":"#2b9fd8";
+  const kc=k=>k==="hub"?"#57bf5b":k==="cluster"?"#2f855a":k==="firewall"?"#f4685f":k==="vwan"?"#38b6f1":k==="mpls"?"#6b7280":k==="internet"||k==="router"||k==="switch"?"#0d6efd":k==="zscaler"?"#0d6efd":k==="prisma"?"#00c2e8":k==="netskope"?"#ff8a00":"#2b9fd8";
   const sug=(tid,label,tag,color)=>`<li><span>${esc(label)} <span class="tag" style="background:${color}">${esc(tag)}</span></span>`
     +`<span class="ed" style="color:#159957;font-weight:800;font-size:15px" title="Add connection" onclick="connectSuggested('${selId}','${tid}')">＋</span></li>`;
   let h=`<div class="hint" style="margin-top:0">From <b>${esc(sd?sd.label:gwSel.label)}</b> — click ＋ to add.</div>`;
@@ -835,7 +854,7 @@ function renderSuggestions(){
   if(fwTargets.length) h+=`<div class="grp">Firewalls</div><ul class="links">${fwTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
   if(vwanTargets.length) h+=`<div class="grp">Virtual WAN</div><ul class="links">${vwanTargets.map(d=>sug(d.id,d.label,"vwan",kc(d.kind))).join("")}</ul>`;
   if(sseTargets.length) h+=`<div class="grp">SASE / SSE</div><ul class="links">${sseTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
-  if(inetTargets.length) h+=`<div class="grp">Internet</div><ul class="links">${inetTargets.map(d=>sug(d.id,d.label,"internet",kc(d.kind))).join("")}</ul>`;
+  if(inetTargets.length) h+=`<div class="grp">Clouds</div><ul class="links">${inetTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
   if(rsTargets.length) h+=`<div class="grp">Router / Switch</div><ul class="links">${rsTargets.map(d=>sug(d.id,d.label,d.kind,kc(d.kind))).join("")}</ul>`;
   if(gwTargets.length) h+=`<div class="grp">Gateways</div><ul class="links">${gwTargets.map(g=>sug(g.id,g.label,"VCG","#2b9fd8")).join("")}</ul>`;
   if(!cand.length && !gwTargets.length) h+=`<div class="muted">No further connections available.</div>`;
@@ -845,7 +864,7 @@ function renderSuggestions(){
 }
 function canConnectKinds(a,b){                            // allowed device↔device pairs (gateways handled separately)
   const fwOK=k=>k==="spoke"||k==="hub"||k==="cluster";   // firewall / SASE connect to spoke/hub/cluster
-  const flex=k=>k==="internet"||k==="router"||k==="switch";   // connect to any component
+  const flex=k=>k==="internet"||k==="mpls"||k==="router"||k==="switch";   // connect to any component
   if(flex(a)||flex(b)) return true;
   if(a==="firewall"||isSSE(a)) return fwOK(b);
   if(b==="firewall"||isSSE(b)) return fwOK(a);
@@ -854,8 +873,8 @@ function canConnectKinds(a,b){                            // allowed device↔de
   return false;
 }
 function canConnectDevices(a,b){                          // cloud-aware pairing
-  const flex=k=>k==="internet"||k==="router"||k==="switch";
-  if(flex(a.kind)||flex(b.kind)) return true;             // internet/router/switch connect to any component
+  const flex=k=>k==="internet"||k==="mpls"||k==="router"||k==="switch";
+  if(flex(a.kind)||flex(b.kind)) return true;             // internet/mpls/router/switch connect to any component
   if(a.kind==="vwan"||b.kind==="vwan"){                  // Virtual WAN ↔ Azure hub only (gateways handled separately)
     const other=a.kind==="vwan"?b:a;
     return other.kind==="hub" && other.cloud==="azure";
@@ -883,7 +902,7 @@ let addSeq=0;
 function nextDropPos(){ const c=viewCenterWorld(), k=addSeq++; return {x:c.x+((k%4)*46-69), y:c.y+(Math.floor(k/4)%4)*46-46}; }
 function addDevice(kind,cloud){
   pushUndo();
-  const base=({hub:"Hub",cluster:"Cluster",firewall:"FW",vwan:"vWAN",internet:"Internet",router:"Router",switch:"Switch",zscaler:"Zscaler",prisma:"Prisma",netskope:"Netskope"})[kind]||"Spoke";
+  const base=({hub:"Hub",cluster:"Cluster",firewall:"FW",vwan:"vWAN",internet:"Internet",mpls:"MPLS",router:"Router",switch:"Switch",zscaler:"Zscaler",prisma:"Prisma",netskope:"Netskope"})[kind]||"Spoke";
   const name=base+(model.devices.filter(d=>d.kind===kind).length+1);
   const p=nextDropPos();
   model.devices.push({id:uid("d"),kind,label:name,cloud:cloud||undefined,x:p.x,y:p.y});   // drop in current view
@@ -909,6 +928,12 @@ function addPlaneBox(which){                              // add a standalone pl
   model.mgmt.planes.push({id:uid("pl"),label:which==="cdp"?"Control and Data Plane":"Management Plane",services:[],x:c.x,y:c.y});
   render();
 }
+function addText(){                                      // add a movable text box
+  const t=prompt("Text:","Text"); if(t===null) return;
+  pushUndo(); const c=viewCenterWorld();
+  (model.texts=model.texts||[]).push({id:uid("t"),text:t.trim()||"Text",x:c.x,y:c.y,size:16});
+  render();
+}
 function paletteSvg(vb,inner,w){ return `<svg viewBox="${vb}" width="${w||30}">${inner}</svg>`; }
 function planeBoxIcon(){ return `<rect x="3" y="7" width="22" height="14" rx="3" fill="#f4f4f4" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="3 2"/>`; }
 function cloudHubIcon(prov){ return `<svg viewBox="0 0 28 28" width="30">${edgeIcon(14,14,11,'var(--hub)')}`
@@ -928,11 +953,14 @@ function buildPalette(){
       ["Cluster","addDevice('cluster')",clusterIc],
       ["Firewall","addDevice('firewall')",paletteSvg("0 0 28 28",firewallIcon(14,14,11,'var(--firewall)'))],
       ["Virtual WAN","addDevice('vwan')",paletteSvg("0 0 28 28",vwanIcon(14,14,11))],
-      ["Internet","addDevice('internet')",paletteSvg("0 0 28 28",internetIcon(14,14,11))],
       ["Router","addDevice('router')",paletteSvg("0 0 28 28",routerIcon(14,14,11))],
       ["Switch","addDevice('switch')",paletteSvg("0 0 28 28",switchIcon(14,14,11))],
       ["VCO","addMgmt('vco')",paletteSvg("0 0 28 28",vcoIcon(14,14,11))],
       ["VCG","addMgmt('vcg')",paletteSvg("0 0 28 28",vcgIcon(14,14,11))],
+    ]},
+    {label:"Clouds", items:[
+      ["Internet","addDevice('internet')",paletteSvg("0 0 28 28",internetIcon(14,14,11))],
+      ["MPLS","addDevice('mpls')",paletteSvg("0 0 28 28",mplsIcon(14,14,11))],
     ]},
     {label:"SASE / SSE", items:[
       ["Zscaler","addDevice('zscaler')",paletteSvg("0 0 28 28",zscalerIcon(14,14,10))],
@@ -1272,7 +1300,8 @@ window.addEventListener("keydown",e=>{
   if(e.key==="Delete"||e.key==="Backspace"){
     if(selectedLink){ e.preventDefault(); delLink(selectedLink); return; }
     if(selected.size){ e.preventDefault(); pushUndo(); [...selected].forEach(id=>{
-      if(id.startsWith("plane:")){ const pid=id.slice(6); model.mgmt.planes=model.mgmt.planes.filter(p=>p.id!==pid); }
+      if(id.startsWith("text:")){ model.texts=(model.texts||[]).filter(t=>"text:"+t.id!==id); }
+      else if(id.startsWith("plane:")){ const pid=id.slice(6); model.mgmt.planes=model.mgmt.planes.filter(p=>p.id!==pid); }
       else if(id.startsWith("svc:")){ model.mgmt.services=mgmtSvcs().filter(v=>"svc:"+v.id!==id);
         model.links=model.links.filter(l=>l.from!==id&&l.to!==id); model.clouds=model.clouds.filter(c=>c.anchor!==id); }
       else if(dev(id)){ model.devices=model.devices.filter(x=>x.id!==id);
