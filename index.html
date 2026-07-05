@@ -243,12 +243,13 @@ const G={startX:170,hubY:340,dxSpoke:180,spokeGap:190,hubGap:80,mgmtTop:80};
 function nodeLayer(kind){
   if(kind==="router"||kind==="switch") return 0;
   if(kind==="spoke"||kind==="firewall") return 1;
+  if(kind==="internet"||kind==="mpls") return 1.5;        // clouds sit between spokes and hubs
   if(kind==="hub"||kind==="cluster") return 2;            // includes AWS/Azure/GCP hubs
-  if(kind==="internet"||kind==="mpls"||kind==="vwan") return 3;
+  if(kind==="vwan") return 3;
   if(kind==="zscaler"||kind==="prisma"||kind==="netskope") return 4;
   return 1;
 }
-const LAYER_Y={0:820,1:660,2:500,3:340,4:200,5:60}, LDX=190, LCX=700;
+const LAYER_Y={0:820,1:660,1.5:580,2:500,3:340,4:200,5:60}, LDX=190, LCX=700;
 function computeGeometry(){
   const pos={};
   const pinned=n=>n&&n.x!=null&&n.y!=null;
@@ -269,7 +270,7 @@ function computeGeometry(){
     arr.forEach((nd,i)=>{ const x=LCX-(n-1)*LDX/2+i*LDX, y=LAYER_Y[L]; posX[nd.id]=x;
       pos[nd.id]= nd.svc ? {x,y,ptype:"svc",svc:nd.svc} : {x,y,kind:nd.kind,node:nd.node}; }); };
   // place from the hub tier outward so each layer aligns to the already-placed neighbours
-  [2,1,3,0,4,5].forEach(placeLayer);
+  [2,1,1.5,3,0,4,5].forEach(placeLayer);
 
   // text boxes (always manually positioned)
   (model.texts||[]).forEach(t=>{ pos["text:"+t.id]={x:t.x!=null?t.x:LCX, y:t.y!=null?t.y:LAYER_Y[3], ptype:"text", node:t}; });
