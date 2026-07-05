@@ -489,8 +489,9 @@ function sseNode(p){
 function clusterNode(p){
   const r=24, dx=32, padX=dx+r+12, padY=r+14;
   const lbl=esc(p.node.label), w=lbl.length*7.6+12, ly=p.y+padY+16;
+  const fill=p.node.color||"var(--hub)";
   let g=`<rect x="${p.x-padX}" y="${p.y-padY}" width="${2*padX}" height="${2*padY}" rx="12" fill="#fff" stroke="#9aa0a6" stroke-width="1.5" stroke-dasharray="4 3"/>`;
-  g+=edgeIcon(p.x-dx,p.y,r,"var(--hub)")+edgeIcon(p.x+dx,p.y,r,"var(--hub)");
+  g+=edgeIcon(p.x-dx,p.y,r,fill)+edgeIcon(p.x+dx,p.y,r,fill);
   g+=`<rect x="${p.x-w/2}" y="${ly-12}" width="${w}" height="17" rx="3" fill="#fff" opacity="0.92"/>`
     +`<text x="${p.x}" y="${ly+1}" text-anchor="middle" font-size="13" font-weight="600" fill="#7c3aed">${lbl}</text>`;
   return g;
@@ -504,7 +505,7 @@ function deviceNode(p){
   if(p.kind==="router") return simpleNode(p,routerIcon);
   if(p.kind==="switch") return simpleNode(p,switchIcon);
   if(isSSE(p.kind)) return sseNode(p);
-  const isHub=p.kind==="hub", fill=isHub?"var(--hub)":"var(--spoke)", r=isHub?38:32;
+  const isHub=p.kind==="hub", fill=p.node.color||(isHub?"var(--hub)":"var(--spoke)"), r=isHub?38:32;
   const ly=isHub?p.y-r-14:p.y+r+20;              // hub label above, spoke label below — clear of links
   const lbl=esc(p.node.label), w=lbl.length*7.6+12;
   const prov=p.node.cloud;
@@ -603,6 +604,12 @@ function render(){
     if(single && p.ptype!=="plane"){                       // resize handle (bottom-right)
       selBadges+=`<g class="resize-handle" data-id="${id}" style="cursor:nwse-resize"><title>Drag to resize</title>`
         +`<rect x="${p.x+hw-6}" y="${p.y+hh-6}" width="12" height="12" rx="2" fill="#2563eb" stroke="#fff" stroke-width="1.5"/></g>`;
+    }
+    if(single && (p.kind==="hub"||p.kind==="spoke"||p.kind==="cluster")){   // recolor SD-WAN device
+      const cols=[["Green","#57bf5b"],["Blue","#2b9fd8"],["Gray","#9aa0a6"]], cyc=p.y+hh+16, sxx=p.x-(cols.length-1)*12;
+      cols.forEach(([nm,col],i)=>{ const cx=sxx+i*24;
+        selBadges+=`<g class="node-color" data-id="${id}" data-color="${col}" style="cursor:pointer"><title>${nm}</title>`
+          +`<circle cx="${cx}" cy="${cyc}" r="8" fill="${col}" stroke="#fff" stroke-width="1.5"/></g>`; });
     }
     if(dev(id)||model.subnets.some(x=>x.id===id)||model.clouds.some(x=>x.id===id)||id.startsWith("svc:")||id.startsWith("plane:")||id.startsWith("text:")){
       const bx=p.x+hw-4, by=p.y-hh+10, ex=bx-22;
@@ -715,6 +722,8 @@ function bindDrag(svg){
       if(en&&gp){ const loc=svgPoint(svg,e); resizing={id,cx:gp.x,cy:gp.y,startScale:en.scale||1,startDist:Math.max(1,Math.hypot(loc.x-gp.x,loc.y-gp.y))}; } return; }
     const lcol=e.target.closest(".link-color");
     if(lcol){ e.preventDefault(); e.stopPropagation(); pushUndo(); const l=model.links.find(x=>x.id===lcol.dataset.lid); if(l){ l.color=lcol.dataset.color; render(); } return; }
+    const ncol=e.target.closest(".node-color");
+    if(ncol){ e.preventDefault(); e.stopPropagation(); pushUndo(); const en=entity(ncol.dataset.id); if(en){ en.color=ncol.dataset.color; render(); } return; }
     if(textMode){                                          // text tool: click to place
       e.preventDefault(); const loc=svgPoint(svg,e); textMode=false;
       const b=document.getElementById("tool-text"); if(b) b.classList.remove("act");
