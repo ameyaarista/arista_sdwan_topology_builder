@@ -1,5 +1,5 @@
-# Arista VeloCloud — SD-WAN Topology Builder
-## Release Notes — v1.0
+# Arista VeloCloud — SE Workshop (SD-WAN Topology Builder)
+## Release Notes
 
 A single-page, zero-dependency web app for drawing SD-WAN topologies. Everything runs in the browser (one `index.html`), auto-saves locally, and deploys to GitHub Pages.
 
@@ -8,13 +8,52 @@ A single-page, zero-dependency web app for drawing SD-WAN topologies. Everything
 
 ---
 
-## Highlights
+## v1.1 — latest
+
+### Multi-page workspaces
+- **Tabs** — draw independent topologies on multiple pages. Each page keeps its own diagram **and its own undo/redo history**. Add (+), switch, double-click to rename inline, and delete tabs. Auto-save now persists all pages (older single-diagram saves migrate to "Page 1" automatically).
+
+### New device types
+- **5G** (orange signal disc) and **Satellite** (dish) added to Network Devices.
+
+### Editing & productivity
+- **Duplicate** selection with **Ctrl/Cmd+D**, and **copy/paste** with **Ctrl/Cmd+C / V** — clones full config (cloud, color, scale, size, labels) plus the links *among* the copied nodes, and reattaches copied subnets to their copied device. Paste centers on your current view; works across pages.
+- **Free-hand lines** — the solid/dotted connector tools now double as free lines: click two nodes to connect them, or **press-drag on empty canvas** to draw a line anywhere. Free lines have draggable endpoints and support color, labels, and delete.
+- **Text font size** — a font-size selector (10–64) appears when a text box is selected.
+- **Everything edits inline** — devices, gateways, subnets (CIDR), text, groups, and connections all rename via an inline field (double-click or ✎). No more pop-ups.
+- **Double-click** to edit works on devices, gateways, text, and connections (custom detection, since the canvas re-renders on every click).
+
+### Styling
+- **Recolor gateways** (VCG) — green/blue/gray swatches, matching devices and subnets.
+
+### Layout quality
+- **Adaptive tier spacing** — auto-layout keeps tiers tight by default and only widens the gap around tiers that have attached subnets, so nothing overlaps and there's no wasted space (e.g., between VCO and gateways).
+- **Collision-free placement** — newly added nodes nudge off any existing node so a drop never lands on top of another.
+- **Clouds tier** — Internet/MPLS now sit on their own tier between spokes and hubs.
+
+### Workspace shortcuts (right panel)
+- **Velo Bug Search** → `bb.infra.corp.arista.io/bug/<id>`
+- **Velo TAC Case** → `case-reader.aristanetworks.com/case/<id>`
+- **Velo OPS Case** → `velocloud.atlassian.net/browse/VELOPS-<id>`
+- **GDrive Search** → Google Drive search for a query
+- **Velo Power BI** → opens the team Power BI report
+
+### Renamed
+- App title is now **Arista Velocloud - SE Workshop**; the header **Reset** button (was "Reset to sample").
+
+> Note: an Align & Distribute panel was trialed in this cycle and removed; the drag **alignment guides** remain.
+
+---
+
+## v1.0 — initial release
+
+### Highlights
 
 - 20+ SD-WAN, network, cloud, and SASE/SSE device types with real product icons
 - Smart connections that auto-style themselves (SD-WAN, IPsec, Interconnect, plain)
 - Layered ("tiered") auto-layout plus one-click Auto-arrange
 - 7 starter templates
-- Full editing: drag, resize, recolor, inline-rename, align & distribute
+- Full editing: drag, resize, recolor, inline-rename
 - Group/region containers, text annotations, freehand pen
 - PNG / SVG export, browser auto-save, undo/redo
 - Live topology validation and a curated Arista/VeloCloud resource library
