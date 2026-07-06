@@ -492,9 +492,9 @@ function devLabel(node,cx,cy,opts){                          // draggable device
   opts=opts||{};
   const raw=node.label!=null?node.label:"";
   if(!raw) return "";
-  const dx=node.lblDx||0, dy=node.lblDy||0, fs=opts.fs||13, color=opts.color||"#7c3aed", w=raw.length*7.6+12;
+  const dx=node.lblDx||0, dy=node.lblDy||0, fs=opts.fs||13, color=opts.color||"#7c3aed", w=raw.length*7.6+16;
   return `<g class="devlabel" data-id="${node.id}" style="cursor:move" transform="translate(${dx},${dy})">`
-    +(opts.bg!==false?`<rect x="${(cx-w/2).toFixed(1)}" y="${cy-12}" width="${w.toFixed(1)}" height="17" rx="3" fill="#fff" opacity="0.92"/>`:"")
+    +(opts.bg!==false?`<rect x="${(cx-w/2).toFixed(1)}" y="${cy-13}" width="${w.toFixed(1)}" height="19" rx="3" fill="#fff"/>`:"")
     +`<text x="${cx}" y="${cy+1}" text-anchor="middle" font-size="${fs}" font-weight="600" fill="${color}">${esc(raw)}</text></g>`;
 }
 function firewallNode(p){
