@@ -685,7 +685,15 @@ function render(){
       if(l.label) s+=linkPill(a,b,l.color||"#6b7280",l.label);
     } else { s+=linkLine(a,b,linkStyleKey(l),l.color,l.label); }
     s+=`</g>`;
-    if(sel){ const by=my-20;
+    [[l.fromIf,a,b],[l.toIf,b,a]].forEach(([iface,p1,p2])=>{ if(!iface) return;   // interface label near the edge end
+      const dx=p2.x-p1.x, dy=p2.y-p1.y, len=Math.hypot(dx,dy)||1, tx=p1.x+dx/len*42, ty=p1.y+dy/len*42-1;
+      s+=`<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#0f766e" stroke="#fff" stroke-width="2.6" paint-order="stroke" style="pointer-events:none">${esc(iface)}</text>`; });
+    if(sel){ const by=my-20, fromE=dev(l.from)&&isEdgeKind(dev(l.from).kind), toE=dev(l.to)&&isEdgeKind(dev(l.to).kind);
+      if(fromE||toE){
+        linkBadges+=`<g class="link-if-badge" data-lid="${l.id}" style="cursor:pointer"><title>Set connection interfaces</title>`
+          +`<circle cx="${mx-44}" cy="${by}" r="9" fill="#0f766e" stroke="#fff" stroke-width="1.5"/>`
+          +`<text x="${mx-44}" y="${by+3.2}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">I/F</text></g>`;
+      }
       linkBadges+=`<g class="link-edit-badge" data-lid="${l.id}" style="cursor:pointer"><title>Edit label</title>`
         +`<circle cx="${mx-22}" cy="${by}" r="9" fill="#2563eb" stroke="#fff" stroke-width="1.5"/>`
         +`<text x="${mx-22}" y="${by+3.6}" text-anchor="middle" font-size="11" fill="#fff">✎</text></g>`;
@@ -878,6 +886,20 @@ let textMode=false;                        // click-to-place text box tool
 let snapGrid=false, dragGuides=null;       // snap-to-grid + alignment guides
 const GRID=20, SNAP=6;
 const RECOLOR_KINDS=new Set(["hub","spoke","cluster","firewall","router","switch","fiveg","satellite","internet","mpls"]);   // nodes whose icon honors a green/blue/gray override
+const EDGE_IFS=["GE1","GE2","GE3","GE4","GE5","GE6","SFP1","SFP2"];   // selectable ports on a spoke/hub edge
+const WAN_KINDS=new Set(["internet","mpls","fiveg","satellite","vwan"]);   // peer kinds that make an interface a WAN link
+const LAN_KINDS=new Set(["switch","router","firewall"]);                    // peer kinds that make an interface a LAN routed interface
+function isEdgeKind(k){ return k==="hub"||k==="spoke"; }
+function edgeIfLinks(d){                                    // interface-assigned links touching this edge, with peer + role
+  const out=[];
+  (model.links||[]).forEach(l=>{ let iface=null, peerId=null;
+    if(l.from===d.id){ iface=l.fromIf; peerId=l.to; } else if(l.to===d.id){ iface=l.toIf; peerId=l.from; } else return;
+    if(!iface) return; const peer=dev(peerId); if(!peer) return;      // svc/gateway/cloud peers -> overlay, skip
+    out.push({iface,peer}); });
+  return out;
+}
+function bumpCidr(cidr,n){ const m=/^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/.exec(String(cidr||"")); if(!m||!n) return cidr;
+  return `${m[1]}.${m[2]}.${(+m[3]+n)&255}.${m[4]}/${m[5]}`; }
 function svgPoint(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
   return p.matrixTransform(svg.getScreenCTM().inverse()); }
 function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(()=>{raf=0;render();}); }
@@ -946,7 +968,7 @@ function bindDrag(svg){
       e.preventDefault(); const gc=e.target.closest(".node");
       if(gc && (dev(gc.dataset.id)||gc.dataset.id.startsWith("svc:"))){ const id=gc.dataset.id;
         if(!connectFrom) connectFrom=id;
-        else if(id!==connectFrom){ pushUndo(); model.links.push({id:uid("l"),from:connectFrom,to:id,style:connectMode.style,transport:"direct"}); connectFrom=null; }
+        else if(id!==connectFrom){ pushUndo(); const nid=uid("l"); model.links.push({id:nid,from:connectFrom,to:id,style:connectMode.style,transport:"direct"}); connectFrom=null; render(); maybePickIfaces(nid); return; }
         render();
       } else if(connectFrom){ connectFrom=null; render(); }   // clicking empty while waiting cancels the pending node link
       else { const loc=svgPoint(svg,e); lineDraw={style:connectMode.style,x1:loc.x,y1:loc.y,x2:loc.x,y2:loc.y}; }   // start a free line
@@ -955,6 +977,8 @@ function bindDrag(svg){
     if(flg){ e.preventDefault(); const lid=flg.dataset.lid, now=Date.now();
       if(lastTap && lastTap.id==="line:"+lid && now-lastTap.t<350){ lastTap=null; editFreeLine(lid); return; }   // double-click = edit label
       lastTap={id:"line:"+lid,t:now}; selectedLine=lid; selected=new Set(); selectedLink=null; render(); return; }
+    const lifb=e.target.closest(".link-if-badge");
+    if(lifb){ e.preventDefault(); e.stopPropagation(); editLinkIfaces(lifb.dataset.lid); return; }
     const lebadge=e.target.closest(".link-edit-badge");
     if(lebadge){ e.preventDefault(); e.stopPropagation(); editLink(lebadge.dataset.lid); return; }
     const lbadge=e.target.closest(".link-del-badge");
@@ -1297,7 +1321,7 @@ function canConnectDevices(a,b){                          // cloud-aware pairing
   }
   return canConnectKinds(a.kind,b.kind);
 }
-function connectSuggested(a,b){ pushUndo(); model.links.push({id:uid("l"),from:a,to:b,transport:isIpsecPair(a,b)?"ipsec":"sdwan"}); render(); }
+function connectSuggested(a,b){ pushUndo(); const nid=uid("l"); model.links.push({id:nid,from:a,to:b,transport:isIpsecPair(a,b)?"ipsec":"sdwan"}); render(); maybePickIfaces(nid); }
 function addSuggestedSubnet(id){ pushUndo(); model.subnets.push({id:uid("s"),anchor:id,cidr:nextSubnetCidr()}); render(); }
 function renderChecks(){ const el=document.getElementById("checks"); if(!el) return;
   const issues=runChecks();
@@ -1429,9 +1453,9 @@ function nextSubnetCidr(){ let n=1; const used=new Set(model.subnets.map(s=>s.ci
 function addLink(){
   const from=document.getElementById("c-from").value, to=document.getElementById("c-to").value;
   if(!from||!to||from===to) return alert("Pick two different devices.");
-  pushUndo();
-  model.links.push({id:uid("l"),from,to,transport:document.getElementById("c-tr").value});
-  render();
+  pushUndo(); const nid=uid("l");
+  model.links.push({id:nid,from,to,transport:document.getElementById("c-tr").value});
+  render(); maybePickIfaces(nid);
 }
 function delLink(id){ pushUndo(); model.links=model.links.filter(l=>l.id!==id); if(selectedLink===id) selectedLink=null; render(); }
 function editFreeLine(id){ const l=(model.lines||[]).find(x=>x.id===id); if(!l) return;
@@ -1702,12 +1726,42 @@ function bgpBlock(b){
   else s+=`    neighbors: []\n`;
   return s;
 }
+function yWanLinks(list){ return list.map(w=>`    - name: ${w.name}\n      wan_overlay: USER_DEFINED\n      nat_direct: true`).join("\n"); }
+function yWanSettings(list){ return list.map(w=>{
+  let s=`    - name: ${w.isp}\n      type: WIRED\n      interfaces: [${w.name}]\n      mode: ${w.mode}\n      discovery: USER_DEFINED`;
+  if(w.mode==="PRIVATE") s+=`\n      orchestrator_service_reachable: true`;
+  return s; }).join("\n"); }
+function yRouted(list){ return list.map(r=>{
+  const addr=r.dhcp?`{ type: DHCP }`:`{ type: STATIC, cidr: ${r.cidr} }`;
+  let s=`    - name: ${r.name}\n      segment_id: Global Segment\n      addressing: ${addr}`;
+  if(!r.dhcp) s+=`\n      dhcp_server: { enabled: false }`;
+  s+=`\n      disabled: ${r.disabled?'true':'false'}\n      advertise: true\n      override: true`;
+  return s; }).join("\n"); }
+function edgeSections(d){                                   // derive WAN/LAN interfaces from assigned links (fallback = default skeleton)
+  const c=edgeVco(d), asg=edgeIfLinks(d);
+  const wan=asg.filter(a=>WAN_KINDS.has(a.peer.kind)), lan=asg.filter(a=>LAN_KINDS.has(a.peer.kind));
+  let wanLinks, wanSettings, routed;
+  if(wan.length){
+    wanLinks=wan.map(a=>({name:a.iface}));
+    wanSettings=wan.map((a,i)=>({name:a.iface, isp:"ISP"+(i+1), mode:a.peer.kind==="mpls"?"PRIVATE":"PUBLIC"}));
+  } else {
+    wanLinks=[{name:"GE3"},{name:"GE4"}];
+    wanSettings=[{name:"GE3",isp:"ISP1",mode:"PRIVATE"},{name:"GE4",isp:"ISP2",mode:"PUBLIC"}];
+  }
+  const subs=(model.subnets||[]).filter(s=>s.anchor===d.id);
+  if(lan.length){
+    routed=lan.map((a,i)=>({name:a.iface, cidr: subs[i]?gwCidr(subs[i].cidr):(i===0?c.lanCidr:bumpCidr(c.lanCidr,i)), disabled:false}));
+  } else {
+    routed=[{name:"GE1", cidr:c.lanCidr, disabled:false},{name:"GE2", dhcp:true, disabled:true}];
+  }
+  return {c, wanLinks, wanSettings, routed, derived:(wan.length||lan.length)};
+}
 function edgeYaml(d){
-  const c=edgeVco(d), isHub=d.kind==="hub", name=edgeName(d);
+  const {c, wanLinks, wanSettings, routed, derived}=edgeSections(d), isHub=d.kind==="hub", name=edgeName(d);
   return `---
 # Generated by Velocloud - SE Workshop topology builder
 # ${isHub?"HUB":"SPOKE"} edge: ${name}
-# 80% skeleton — layer BGP / bizpolicy / sub-interfaces as YAML below as needed.
+# ${derived?"WAN/LAN interfaces derived from the diagram.":"No interfaces assigned — default skeleton."} Layer BGP / bizpolicy / sub-interfaces as YAML below as needed.
 velocloud_edge:
   profile: ${c.profile}
   site:
@@ -1717,38 +1771,11 @@ velocloud_edge:
 
 velocloud_edge_config:
   wan_links:
-    - name: GE3
-      wan_overlay: USER_DEFINED
-      nat_direct: true
-    - name: GE4
-      wan_overlay: USER_DEFINED
-      nat_direct: true
+${yWanLinks(wanLinks)}
   wan_link_settings:
-    - name: ISP1
-      type: WIRED
-      interfaces: [GE3]
-      mode: PRIVATE
-      discovery: USER_DEFINED
-      orchestrator_service_reachable: true
-    - name: ISP2
-      type: WIRED
-      interfaces: [GE4]
-      mode: PUBLIC
-      discovery: USER_DEFINED
+${yWanSettings(wanSettings)}
   routed_interfaces:
-    - name: GE1
-      segment_id: Global Segment
-      addressing: { type: STATIC, cidr: ${c.lanCidr} }
-      dhcp_server: { enabled: false }
-      disabled: false
-      advertise: true
-      override: true
-    - name: GE2
-      segment_id: Global Segment
-      addressing: { type: DHCP }
-      disabled: true
-      advertise: true
-      override: true
+${yRouted(routed)}
   vlans:
     - name: Corporate
       vlan_id: 1
@@ -1824,6 +1851,42 @@ function editEdgeConfig(id){
     d.vco={ profile:q("#ec-profile").value.trim()||"DMPO-Profile", city:q("#ec-city").value.trim(), state:q("#ec-state").value.trim(), country:q("#ec-country").value.trim(), lanCidr:q("#ec-lan").value.trim(),
       bgp:{ enabled:q("#ec-bgp").checked, asn:q("#ec-asn").value.trim(), neighborIp:q("#ec-nip").value.trim(), neighborAs:q("#ec-nas").value.trim() } };
     close(); render(); };
+}
+function editLinkIfaces(lid){                              // pick the GE/SFP interface on each spoke/hub end of a link
+  const l=(model.links||[]).find(x=>x.id===lid); if(!l) return;
+  const a=dev(l.from), b=dev(l.to);
+  const aEdge=a&&isEdgeKind(a.kind), bEdge=b&&isEdgeKind(b.kind);
+  if(!aEdge&&!bEdge) return;                               // interfaces only apply to spoke/hub ends
+  const IS="width:100%;margin:3px 0 10px;padding:5px 7px;border:1px solid #d0d5dd;border-radius:6px;font-size:13px;box-sizing:border-box";
+  const LB="font-size:12px;font-weight:600;color:#374151";
+  const optsFor=cur=>`<option value=""> — none — </option>`+EDGE_IFS.map(x=>`<option value="${x}" ${cur===x?'selected':''}>${x}</option>`).join("");
+  const endRow=(who,node,cur,isEdge)=> isEdge
+    ? `<label style="${LB}">${who}: ${esc(node.label||who)} <span style="color:#0f766e">(${node.kind})</span></label><select id="if-${who}" style="${IS}">${optsFor(cur)}</select>`
+    : `<div style="font-size:12px;color:#6b7280;margin:3px 0 10px">${who}: ${esc((node&&node.label)||anchorLabel(who==="from"?l.from:l.to))} — not an edge</div>`;
+  const wrap=document.createElement("div");
+  wrap.style.cssText="position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center";
+  wrap.innerHTML=`<div style="background:#fff;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.25);width:340px;padding:18px;font-family:inherit">
+    <div style="font-weight:700;font-size:15px;margin-bottom:2px">Connection interfaces</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:12px">Ports drive WAN/LAN in the exported host_vars.</div>
+    ${endRow("from",a,l.fromIf,aEdge)}
+    ${endRow("to",b,l.toIf,bEdge)}
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+      <button id="if-cancel" style="padding:6px 14px;border:1px solid #d0d5dd;background:#fff;border-radius:7px;cursor:pointer;font-size:13px">Cancel</button>
+      <button id="if-save" style="padding:6px 16px;border:none;background:#2563eb;color:#fff;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600">Save</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const q=s=>wrap.querySelector(s), close=()=>wrap.remove();
+  q("#if-cancel").onclick=close;
+  wrap.addEventListener("mousedown",e=>{ if(e.target===wrap) close(); });
+  q("#if-save").onclick=()=>{ pushUndo();
+    if(aEdge) l.fromIf=q("#if-from").value||undefined;
+    if(bEdge) l.toIf=q("#if-to").value||undefined;
+    close(); render(); };
+}
+function maybePickIfaces(lid){                             // auto-open the picker if a new link touches an edge
+  const l=(model.links||[]).find(x=>x.id===lid); if(!l) return;
+  const a=dev(l.from), b=dev(l.to);
+  if((a&&isEdgeKind(a.kind))||(b&&isEdgeKind(b.kind))) editLinkIfaces(lid);
 }
 
 /* ================= ZOOM / FIT ========================================= */
