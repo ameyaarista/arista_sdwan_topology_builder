@@ -499,7 +499,7 @@ function devLabel(node,cx,cy,opts){                          // draggable device
 }
 function firewallNode(p){
   const r=32, ly=p.y+r+20;
-  return firewallIcon(p.x,p.y,r,'var(--firewall)')+devLabel(p.node,p.x,ly);
+  return firewallIcon(p.x,p.y,r,p.node.color||'var(--firewall)')+devLabel(p.node,p.x,ly);
 }
 // Azure Virtual WAN: light-blue cloud + blue globe + pink connector dots
 function vwanIcon(cx,cy,r){
@@ -546,28 +546,28 @@ function netskopeIcon(cx,cy,r){ const f=n=>n.toFixed(1), gy="#5b5b66";
 function cloudOutline(cx,cy,r,color){ const s=(2.7*r)/24, tx=(cx-12*s).toFixed(2), ty=(cy-13*s).toFixed(2), sw=(1.8/s).toFixed(2);
   return `<g transform="translate(${tx},${ty}) scale(${s.toFixed(3)})">`
     +`<path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="#fff" stroke="${color}" stroke-width="${sw}" stroke-linejoin="round"/></g>`; }
-function internetIcon(cx,cy,r){ return cloudOutline(cx,cy,r,"#0d6efd"); }
-function mplsIcon(cx,cy,r){ return cloudOutline(cx,cy,r,"#6b7280"); }
+function internetIcon(cx,cy,r,col){ return cloudOutline(cx,cy,r,col||"#0d6efd"); }
+function mplsIcon(cx,cy,r,col){ return cloudOutline(cx,cy,r,col||"#6b7280"); }
 function cloudLabelNode(p,iconFn,textFill){
-  const r=34;
-  return iconFn(p.x,p.y,r)+devLabel(p.node,p.x,p.y+4,{color:textFill,fs:12,bg:false});
+  const r=34, col=p.node.color;
+  return iconFn(p.x,p.y,r,col)+devLabel(p.node,p.x,p.y+4,{color:col||textFill,fs:12,bg:false});
 }
 function internetNode(p){ return cloudLabelNode(p,internetIcon,"#1f6bb0"); }
 function mplsNode(p){ return cloudLabelNode(p,mplsIcon,"#374151"); }
 // Router: blue circle outline with an X
-function routerIcon(cx,cy,r){ const f=n=>n.toFixed(1), col="#0d6efd", d=r*0.42, sw=Math.max(2,r*0.16).toFixed(2);
+function routerIcon(cx,cy,r,col){ const f=n=>n.toFixed(1); col=col||"#0d6efd"; const d=r*0.42, sw=Math.max(2,r*0.16).toFixed(2);
   return `<circle cx="${cx}" cy="${cy}" r="${f(r)}" fill="#fff" stroke="${col}" stroke-width="${(r*0.13).toFixed(2)}"/>`
     +`<line x1="${f(cx-d)}" y1="${f(cy-d)}" x2="${f(cx+d)}" y2="${f(cy+d)}" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"/>`
     +`<line x1="${f(cx+d)}" y1="${f(cy-d)}" x2="${f(cx-d)}" y2="${f(cy+d)}" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"/>`; }
 // Switch: blue rounded rectangle with two rows of bars
-function switchIcon(cx,cy,r){ const f=n=>n.toFixed(1), col="#0d6efd", w=1.95*r, h=1.25*r, x0=cx-w/2, bh=0.17*r;
+function switchIcon(cx,cy,r,col){ const f=n=>n.toFixed(1); col=col||"#0d6efd"; const w=1.95*r, h=1.25*r, x0=cx-w/2, bh=0.17*r;
   let g=`<rect x="${f(x0)}" y="${f(cy-h/2)}" width="${f(w)}" height="${f(h)}" rx="${f(0.14*r)}" fill="#fff" stroke="${col}" stroke-width="${(r*0.11).toFixed(2)}"/>`;
   [-0.22,0.22].forEach(fy=>{ const y=cy+fy*h;
     g+=`<rect x="${f(x0+0.14*w)}" y="${f(y-bh/2)}" width="${f(0.44*w)}" height="${f(bh)}" rx="${f(bh/2)}" fill="${col}"/>`;
     g+=`<rect x="${f(x0+0.64*w)}" y="${f(y-bh/2)}" width="${f(0.22*w)}" height="${f(bh)}" rx="${f(bh/2)}" fill="${col}"/>`; });
   return g; }
 // 5G: orange disc with signal arcs + "5G"
-function fivegIcon(cx,cy,r){ const f=n=>n.toFixed(1), col="#f5921e";
+function fivegIcon(cx,cy,r,col){ const f=n=>n.toFixed(1); col=col||"#f5921e";
   let g=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}"/>`;
   const by=cy-0.02*r, sw=Math.max(1.4,r*0.06).toFixed(2);
   [0.72,0.52,0.32].forEach(rr=>{ const R=rr*r;
@@ -575,7 +575,7 @@ function fivegIcon(cx,cy,r){ const f=n=>n.toFixed(1), col="#f5921e";
   g+=`<text x="${cx}" y="${f(cy+0.52*r)}" text-anchor="middle" font-size="${f(r*0.5)}" font-weight="800" fill="#fff" font-family="Arial, sans-serif">5G</text>`;
   return g; }
 // Satellite dish silhouette
-function satelliteIcon(cx,cy,r){ const f=n=>n.toFixed(1), col="#111827";
+function satelliteIcon(cx,cy,r,col){ const f=n=>n.toFixed(1); col=col||"#111827";
   let g=`<g transform="rotate(-25 ${cx} ${f(cy-0.08*r)})"><ellipse cx="${cx}" cy="${f(cy-0.08*r)}" rx="${f(0.72*r)}" ry="${f(0.44*r)}" fill="${col}"/></g>`;
   g+=`<line x1="${f(cx+0.05*r)}" y1="${f(cy-0.12*r)}" x2="${f(cx+0.52*r)}" y2="${f(cy-0.6*r)}" stroke="${col}" stroke-width="${f(r*0.07)}" stroke-linecap="round"/>`;
   g+=`<circle cx="${f(cx+0.52*r)}" cy="${f(cy-0.6*r)}" r="${f(0.09*r)}" fill="${col}"/>`;
@@ -583,7 +583,7 @@ function satelliteIcon(cx,cy,r){ const f=n=>n.toFixed(1), col="#111827";
   g+=`<line x1="${f(cx-0.42*r)}" y1="${f(cy+0.64*r)}" x2="${f(cx+0.34*r)}" y2="${f(cy+0.64*r)}" stroke="${col}" stroke-width="${f(r*0.1)}" stroke-linecap="round"/>`;
   return g; }
 function simpleNode(p,iconFn,r){ r=r||30; const ly=p.y+r+18;
-  return iconFn(p.x,p.y,r)+devLabel(p.node,p.x,ly); }
+  return iconFn(p.x,p.y,r,p.node.color)+devLabel(p.node,p.x,ly); }
 const SSEICON={zscaler:zscalerIcon,prisma:prismaIcon,netskope:netskopeIcon};
 function sseNode(p){
   const r=30, ly=p.y+r+20;
@@ -732,7 +732,7 @@ function render(){
       selBadges+=`<g class="resize-handle" data-id="${id}" style="cursor:nwse-resize"><title>Drag to resize</title>`
         +`<rect x="${p.x+hw-6}" y="${p.y+hh-6}" width="12" height="12" rx="2" fill="#2563eb" stroke="#fff" stroke-width="1.5"/></g>`;
     }
-    if(single && (p.kind==="hub"||p.kind==="spoke"||p.kind==="cluster"||p.ptype==="subnet"||p.ptype==="group"||(p.ptype==="svc"&&p.svc&&p.svc.type==="vcg"))){   // recolor device / subnet / group / gateway
+    if(single && ((p.kind&&RECOLOR_KINDS.has(p.kind))||p.ptype==="subnet"||p.ptype==="group"||(p.ptype==="svc"&&p.svc&&p.svc.type==="vcg"))){   // recolor device / subnet / group / gateway
       const cols=[["Green","#57bf5b"],["Blue","#2b9fd8"],["Gray","#9aa0a6"]], cyc=p.y+hh+16, sxx=p.x-(cols.length-1)*12;
       cols.forEach(([nm,col],i)=>{ const cx=sxx+i*24;
         selBadges+=`<g class="node-color" data-id="${id}" data-color="${col}" style="cursor:pointer"><title>${nm}</title>`
@@ -782,7 +782,13 @@ function render(){
     const hw=p.ptype==="plane"?p.mW/2:p.ptype==="group"?p.w/2:p.ptype==="cloud"?80:(p.kind==="cluster"?74:p.kind?60:80);
     const hh=p.ptype==="plane"?p.mH/2:p.ptype==="group"?p.h/2:p.ptype==="cloud"?32:(p.kind==="cluster"?52:p.kind?66:30);
     minX=Math.min(minX,p.x-hw); maxX=Math.max(maxX,p.x+hw);
-    minY=Math.min(minY,p.y-hh); maxY=Math.max(maxY,p.y+hh); });
+    minY=Math.min(minY,p.y-hh); maxY=Math.max(maxY,p.y+hh);
+    const nd=p.node;                                          // keep a dragged name label inside the viewBox
+    if(nd && nd.label && (nd.lblDx||nd.lblDy)){
+      const lw=(String(nd.label).length*7.6+16)/2, lx=p.x+(nd.lblDx||0), ly=p.y+(nd.lblDy||0);
+      minX=Math.min(minX,lx-lw); maxX=Math.max(maxX,lx+lw);
+      minY=Math.min(minY,ly-70); maxY=Math.max(maxY,ly+70);
+    } });
   (model.lines||[]).forEach(l=>{ minX=Math.min(minX,l.x1,l.x2); maxX=Math.max(maxX,l.x1,l.x2); minY=Math.min(minY,l.y1,l.y2); maxY=Math.max(maxY,l.y1,l.y2); });
   if(!isFinite(minX)){ minX=0;minY=0;maxX=560;maxY=360; }
   minX-=30; minY-=30; maxX+=30; maxY+=40;
@@ -864,6 +870,7 @@ let labelDrag=null;                        // dragging a device name label to re
 let textMode=false;                        // click-to-place text box tool
 let snapGrid=false, dragGuides=null;       // snap-to-grid + alignment guides
 const GRID=20, SNAP=6;
+const RECOLOR_KINDS=new Set(["hub","spoke","cluster","firewall","router","switch","fiveg","satellite","internet","mpls"]);   // nodes whose icon honors a green/blue/gray override
 function svgPoint(svg,e){ const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
   return p.matrixTransform(svg.getScreenCTM().inverse()); }
 function scheduleRender(){ if(raf) return; raf=requestAnimationFrame(()=>{raf=0;render();}); }
