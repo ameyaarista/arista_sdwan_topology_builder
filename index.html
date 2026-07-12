@@ -173,6 +173,8 @@
       <button id="con-dotted" onclick="setConnect('dotted')" title="Dotted connector — click two nodes" style="font-size:15px">┄</button>
       <button id="tool-text" onclick="setTextMode()" title="Add text box — then click on the canvas" style="font-weight:700">T</button>
       <button onclick="addGroup()" title="Add group / region container" style="font-size:15px">▢</button>
+      <span style="width:1px;height:18px;background:#e5e7eb;margin:0 2px"></span>
+      <button id="tool-manualif" onclick="toggleManualIfaces()" title="Manual interface selection ON: pick GE/SFP ports per connection. OFF: auto-assign (WAN GE3–GE6, LAN GE1/GE2/SFP1/SFP2)." style="width:auto;padding:0 8px;font-size:12px">I/F: Auto</button>
     </div>
     <div class="canvas">
       <div id="stage">
@@ -887,6 +889,19 @@ let snapGrid=false, dragGuides=null;       // snap-to-grid + alignment guides
 const GRID=20, SNAP=6;
 const RECOLOR_KINDS=new Set(["hub","spoke","cluster","firewall","router","switch","fiveg","satellite","internet","mpls"]);   // nodes whose icon honors a green/blue/gray override
 const EDGE_IFS=["GE1","GE2","GE3","GE4","GE5","GE6","SFP1","SFP2"];   // selectable ports on a spoke/hub edge
+const WAN_IF_POOL=["GE3","GE4","GE5","GE6"];              // auto-assign pools (used when manual I/F is OFF)
+const LAN_IF_POOL=["GE1","GE2","SFP1","SFP2"];
+let manualIfaces=(()=>{ try{ return localStorage.getItem("sdwan_manual_ifaces")==="1"; }catch(e){ return false; } })();
+function toggleManualIfaces(){ manualIfaces=!manualIfaces; try{ localStorage.setItem("sdwan_manual_ifaces",manualIfaces?"1":"0"); }catch(e){} updateManualIfBtn(); }
+function updateManualIfBtn(){ const b=document.getElementById("tool-manualif"); if(!b) return;
+  b.textContent="I/F: "+(manualIfaces?"Manual":"Auto"); b.classList.toggle("act",manualIfaces); }
+function autoIface(edge,peerKind){                         // pick the next free port from the WAN or LAN pool
+  const pool=WAN_KINDS.has(peerKind)?WAN_IF_POOL:LAN_KINDS.has(peerKind)?LAN_IF_POOL:null;
+  if(!pool) return undefined;                             // overlay peer (edge/gateway) -> no physical port
+  const used=new Set();
+  (model.links||[]).forEach(l=>{ if(l.from===edge.id&&l.fromIf) used.add(l.fromIf); if(l.to===edge.id&&l.toIf) used.add(l.toIf); });
+  return pool.find(p=>!used.has(p))||pool[pool.length-1];
+}
 const WAN_KINDS=new Set(["internet","mpls","fiveg","satellite","vwan"]);   // peer kinds that make an interface a WAN link
 const LAN_KINDS=new Set(["switch","router","firewall"]);                    // peer kinds that make an interface a LAN routed interface
 function isEdgeKind(k){ return k==="hub"||k==="spoke"; }
@@ -1883,10 +1898,14 @@ function editLinkIfaces(lid){                              // pick the GE/SFP in
     if(bEdge) l.toIf=q("#if-to").value||undefined;
     close(); render(); };
 }
-function maybePickIfaces(lid){                             // auto-open the picker if a new link touches an edge
+function maybePickIfaces(lid){                             // on new link touching an edge: open picker (manual) or auto-assign
   const l=(model.links||[]).find(x=>x.id===lid); if(!l) return;
-  const a=dev(l.from), b=dev(l.to);
-  if((a&&isEdgeKind(a.kind))||(b&&isEdgeKind(b.kind))) editLinkIfaces(lid);
+  const a=dev(l.from), b=dev(l.to), aEdge=a&&isEdgeKind(a.kind), bEdge=b&&isEdgeKind(b.kind);
+  if(!aEdge&&!bEdge) return;
+  if(manualIfaces){ editLinkIfaces(lid); return; }
+  if(aEdge) l.fromIf=autoIface(a, b?b.kind:null);         // auto: WAN GE3–GE6, LAN GE1/GE2/SFP1/SFP2
+  if(bEdge) l.toIf=autoIface(b, a?a.kind:null);
+  render();
 }
 
 /* ================= ZOOM / FIT ========================================= */
@@ -2061,6 +2080,7 @@ render();
 initDraw();
 initResize();
 updateHistUI();
+updateManualIfBtn();
 requestAnimationFrame(centerScroll);                  // center the pannable canvas on load
 </script>
 </body>
