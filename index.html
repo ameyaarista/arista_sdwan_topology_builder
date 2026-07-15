@@ -88,6 +88,15 @@
   .pal-btn svg{display:block;height:34px;width:auto}
   .pal-grp{grid-column:1/-1;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#9ca3af;margin:6px 0 0}
   .tag{font-size:10px;padding:1px 6px;border-radius:10px;color:#fff}
+  input:focus,select:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .tool-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;text-decoration:none;color:#1f2937;margin-top:6px;transition:background .15s,border-color .15s,box-shadow .15s}
+  .tool-link:hover{background:#f8fafc;border-color:#bfdbfe;box-shadow:0 1px 4px rgba(16,24,40,.08)}
+  .tool-ic{flex:0 0 30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px}
+  .tool-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .tool-tx b{font-size:12.5px;font-weight:600;line-height:1.2}
+  .tool-tx small{font-size:11px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tool-arrow{flex:0 0 auto;color:#b8bec6;transition:color .15s,transform .15s}
+  .tool-link:hover .tool-arrow{color:#2563eb;transform:translate(1px,-1px)}
   svg{display:block}
 </style>
 </head>
@@ -233,16 +242,20 @@
     </div>
 
     <div class="section" style="padding:10px 12px">
-      <a href="https://app.powerbi.com/groups/me/apps/d955530f-07d6-4a3f-9939-74076b199a3c/reports/cd776021-10ef-449f-b4ba-e57f0b69bea6/86d2e6daab182cc1b635?experience=power-bi" target="_blank" rel="noopener" class="btn sec" style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;width:auto">
-        <svg width="15" height="15" viewBox="0 0 24 24"><rect x="3" y="13" width="4" height="8" rx="1" fill="#f2c811"/><rect x="10" y="8" width="4" height="13" rx="1" fill="#eaa300"/><rect x="17" y="3" width="4" height="18" rx="1" fill="#e66c00"/></svg>
-        Velo Power BI ↗
+      <h2 style="margin:0 0 2px">Tools</h2>
+      <a href="https://app.powerbi.com/groups/me/apps/d955530f-07d6-4a3f-9939-74076b199a3c/reports/cd776021-10ef-449f-b4ba-e57f0b69bea6/86d2e6daab182cc1b635?experience=power-bi" target="_blank" rel="noopener" class="tool-link">
+        <span class="tool-ic" style="background:#fef7e6">
+          <svg width="16" height="16" viewBox="0 0 24 24"><rect x="3" y="13" width="4" height="8" rx="1" fill="#f2c811"/><rect x="10" y="8" width="4" height="13" rx="1" fill="#eaa300"/><rect x="17" y="3" width="4" height="18" rx="1" fill="#e66c00"/></svg>
+        </span>
+        <span class="tool-tx"><b>Velo Power BI</b><small>Dashboards &amp; reports</small></span>
+        <svg class="tool-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg>
       </a>
-    </div>
-
-    <div class="section" style="padding:10px 12px">
-      <a href="cloudinit.html" target="_blank" rel="noopener" class="btn sec" style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;width:auto" title="Generate cloud-init seed ISOs for Virtual Edge, Gateway and Orchestrator">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2b9fd8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
-        Cloud-Init Builder ↗
+      <a href="cloudinit.html" target="_blank" rel="noopener" class="tool-link" title="Generate cloud-init seed ISOs for Virtual Edge, Gateway and Orchestrator">
+        <span class="tool-ic" style="background:#e8f4fb">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2b9fd8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
+        </span>
+        <span class="tool-tx"><b>Cloud-Init Builder</b><small>Seed ISOs for vEdge / GW / VCO</small></span>
+        <svg class="tool-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg>
       </a>
     </div>
 
