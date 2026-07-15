@@ -220,6 +220,10 @@
         <input type="text" id="e_password" placeholder="required — Edge image has no default password" spellcheck="false">
         <div class="check"><input type="checkbox" id="e_sshpw" checked><span>Allow SSH password login (<code>ssh_pwauth</code>)</span></div>
 
+        <h3>Run commands <span class="opt" style="text-transform:none;font-weight:400">(optional)</span></h3>
+        <label>Commands <span class="opt">(one per line, run at first boot via <code>runcmd</code>)</span></label>
+        <textarea id="e_runcmd" rows="2" placeholder="chage -M -1 vcadmin" spellcheck="false"></textarea>
+
         <h3>WAN interfaces <span class="opt" style="font-weight:400;text-transform:none">(optional — DHCP on all interfaces if empty)</span></h3>
         <div id="e_ifaces"></div>
         <button class="btn-add" onclick="edgeAddIface()">+ Add interface</button>
@@ -289,6 +293,10 @@
         <label>Console password</label><input type="text" id="g_password" placeholder="password for vcadmin" spellcheck="false">
         <label>SSH public keys <span class="opt">(one per line, optional)</span></label>
         <textarea id="g_sshkeys" rows="3" placeholder="ssh-rsa AAAA... user@host" spellcheck="false"></textarea>
+
+        <h3>Run commands <span class="opt" style="text-transform:none;font-weight:400">(optional)</span></h3>
+        <label>Commands <span class="opt">(one per line, run at first boot via <code>runcmd</code>)</span></label>
+        <textarea id="g_runcmd" rows="2" placeholder="chage -M -1 vcadmin" spellcheck="false"></textarea>
       </div>
 
       <!-- ========== VCO ========== -->
@@ -325,6 +333,10 @@
         <div class="check"><input type="checkbox" id="v_removedefault" checked><span>Remove default users (<code>remove_default_users</code>)</span></div>
         <label>System properties <span class="opt">(key:value, one per line, optional)</span></label>
         <textarea id="v_sysprops" rows="3" placeholder="network.public.address:vco.example.com&#10;mail.smtp.host:smtp.example.com" spellcheck="false"></textarea>
+
+        <h3>Run commands <span class="opt" style="text-transform:none;font-weight:400">(optional)</span></h3>
+        <label>Commands <span class="opt">(one per line, run at first boot via <code>runcmd</code>)</span></label>
+        <textarea id="v_runcmd" rows="2" placeholder="chage -M -1 vcadmin" spellcheck="false"></textarea>
 
         <h3>SSL certificate <span class="opt" style="text-transform:none;font-weight:400">(optional — replaces self-signed cert)</span></h3>
         <label>Server certificate (PEM)</label>
@@ -379,6 +391,13 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 1800);
+}
+function runcmdBlock(id) {                // YAML runcmd: section from a one-command-per-line textarea
+  const cmds = val(id).split('\n').map(s => s.trim()).filter(Boolean);
+  if (!cmds.length) return '';
+  let s = 'runcmd:\n';
+  for (const c of cmds) s += '  - ' + c + '\n';
+  return s;
 }
 function markReq(id, missing) {           // highlight a mandatory field when empty
   const el = $(id);
@@ -486,6 +505,7 @@ function genEdge() {
   ud += '            vco: ' + (vco || 'VCO_ADDRESS_HERE') + '\n';
   ud += '            activation_code: ' + (code || 'ACTIVATION_CODE_HERE') + '\n';
   ud += '            vco_ignore_cert_errors: ' + ($('e_ignorecert').checked ? 'true' : 'false') + '\n';
+  ud += runcmdBlock('e_runcmd');
 
   return { files: [ {name:'user-data', content: ud}, {name:'meta-data', content: md} ],
            isoName: host + '-cidata.iso', warns };
@@ -568,6 +588,7 @@ function genGateway() {
   ud += '    vco: ' + (vco || 'VCO_ADDRESS_HERE') + '\n';
   ud += '    activation_code: ' + (code || 'ACTIVATION_CODE_HERE') + '\n';
   ud += '    vco_ignore_cert_errors: ' + ($('g_ignorecert').checked ? 'true' : 'false') + '\n';
+  ud += runcmdBlock('g_runcmd');
 
   const files = [ {name:'user-data', content: ud}, {name:'meta-data', content: md} ];
   if (nc) files.push({name:'network-config', content: nc});
@@ -637,6 +658,8 @@ function genVco() {
       for (const p of props) ud += '      ' + p + '\n';
     }
   }
+
+  ud += runcmdBlock('v_runcmd');
 
   const crt = $('v_crt').value.trim(), key = $('v_key').value.trim();
   if (crt || key) {
