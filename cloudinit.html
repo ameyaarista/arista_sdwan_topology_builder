@@ -350,16 +350,6 @@
         <summary>Equivalent manual command (genisoimage / mkisofs)</summary>
         <code id="cmdline"></code>
       </details>
-      <details class="cmd">
-        <summary>Validate on a Linux box (optional)</summary>
-        <code>cloud-init schema --config-file user-data
-cloud-init schema --schema-type network-config --config-file network-config</code>
-        <div class="hint" style="margin-top:6px">
-          Note: upstream cloud-init doesn't know the VeloCloud vendor sections, so it reports
-          <i>"Additional properties are not allowed ('velocloud'/'vco' was unexpected)"</i> — that one error is expected
-          and harmless; the VeloCloud image's own cloud-init consumes those keys. Everything else should pass.
-        </div>
-      </details>
     </div>
   </div>
 
