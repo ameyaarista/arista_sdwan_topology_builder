@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VeloCloud Cloud-Init Builder</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%232988c9'/%3E%3Ctext x='32' y='42' font-size='28' text-anchor='middle' fill='white' font-family='sans-serif'%3ECI%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --blue: #2988c9;
+    --blue-dark: #1e6ea6;
+    --bg: #f2f6f9;
+    --card: #ffffff;
+    --text: #1e2a33;
+    --muted: #64798a;
+    --border: #d7e2ea;
+    --mono-bg: #10202c;
+    --mono-text: #d7e6f2;
+    --ok: #2e9e5b;
+    --warn: #c77c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+  }
+  header {
+    background: linear-gradient(135deg, #10202c, #1b3a52);
+    color: #fff; padding: 22px 28px;
+  }
+  header h1 { margin: 0; font-size: 21px; font-weight: 600; }
+  header p { margin: 4px 0 0; color: #9fc0d8; font-size: 13px; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px; }
+
+  /* device tabs */
+  .devtabs { display: flex; gap: 12px; margin: 18px 0 20px; flex-wrap: wrap; }
+  .devtab {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border: 2px solid var(--border); border-radius: 12px;
+    padding: 12px 20px 12px 12px; cursor: pointer; min-width: 220px;
+    transition: all .15s;
+  }
+  .devtab:hover { border-color: var(--blue); }
+  .devtab.active { border-color: var(--blue); box-shadow: 0 2px 10px rgba(41,136,201,.25); }
+  .devtab svg { width: 52px; height: 52px; flex: none; }
+  .devtab .t { font-weight: 600; font-size: 15px; }
+  .devtab .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .cols { display: grid; grid-template-columns: minmax(380px, 520px) 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .cols { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card h3 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 22px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px;
+  }
+  .card h3:first-of-type { margin-top: 14px; }
+  label { display: block; font-weight: 600; font-size: 13px; margin: 12px 0 4px; }
+  label .opt { color: var(--muted); font-weight: 400; }
+  input[type=text], input[type=password], textarea, select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-family: inherit; background: #fbfdfe; color: var(--text);
+  }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid rgba(41,136,201,.35); border-color: var(--blue); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; }
+  .check input { width: 16px; height: 16px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+  /* arm selector */
+  .armsel { display: flex; gap: 10px; margin-top: 6px; }
+  .armopt {
+    flex: 1; border: 2px solid var(--border); border-radius: 10px; padding: 10px 12px;
+    cursor: pointer; text-align: center;
+  }
+  .armopt.active { border-color: var(--blue); background: #eef6fc; }
+  .armopt .t { font-weight: 600; }
+  .armopt .s { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+  /* edge interface rows */
+  .ifrow { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-top: 10px; background: #fafcfe; }
+  .ifrow .head { display: flex; gap: 8px; align-items: center; }
+  .ifrow .head input, .ifrow .head select { width: auto; }
+  .ifrow .head .ifname { width: 76px; }
+  .ifrow .del {
+    margin-left: auto; background: none; border: none; color: #b33; cursor: pointer; font-size: 16px; padding: 2px 6px;
+  }
+  .ifrow .static { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .btn-add {
+    margin-top: 10px; background: #eef6fc; color: var(--blue-dark); border: 1px dashed var(--blue);
+    border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+
+  /* output */
+  .filetabs { display: flex; gap: 6px; margin-bottom: 0; flex-wrap: wrap; }
+  .filetab {
+    background: #1a3145; color: #8fb3cc; border: none; border-radius: 8px 8px 0 0;
+    padding: 8px 16px; cursor: pointer; font-size: 12.5px; font-family: ui-monospace, Menlo, monospace;
+  }
+  .filetab.active { background: var(--mono-bg); color: #fff; }
+  pre.preview {
+    background: var(--mono-bg); color: var(--mono-text); border-radius: 0 10px 10px 10px;
+    padding: 16px; margin: 0; font-size: 12.5px; line-height: 1.55; overflow: auto;
+    min-height: 260px; max-height: 480px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre;
+  }
+  .actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .btn {
+    border: none; border-radius: 9px; padding: 10px 18px; cursor: pointer;
+    font-size: 13.5px; font-weight: 600;
+  }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-ghost { background: #eef3f7; color: var(--text); }
+  .btn-ghost:hover { background: #e2ebf2; }
+  .warnbox {
+    background: #fdf6ec; border: 1px solid #ecd3ab; color: #7c5a1e; border-radius: 8px;
+    padding: 8px 12px; font-size: 12.5px; margin-top: 12px; display: none;
+  }
+  .valbox { margin-top: 10px; font-size: 12.5px; }
+  .valbox .v { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
+  .valbox .name { font-family: ui-monospace, Menlo, monospace; min-width: 120px; }
+  .valbox .ok { color: var(--ok); }
+  .valbox .err { color: #b33; }
+  details.cmd { margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+  details.cmd code {
+    display: block; background: #eef3f7; border-radius: 8px; padding: 10px 12px; margin-top: 8px;
+    font-size: 12px; color: var(--text); overflow-x: auto; white-space: pre;
+  }
+  footer { margin-top: 30px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+  footer a { color: var(--blue-dark); }
+  .toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: #10202c; color: #fff; padding: 9px 18px; border-radius: 20px; font-size: 13px;
+    opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VeloCloud Cloud-Init Builder</h1>
+  <p>Generate cloud-init seed ISOs for VeloCloud Edge, Gateway and Orchestrator — entirely in your browser. Nothing is uploaded anywhere.</p>
+</header>
+
+<div class="wrap">
+
+  <!-- device selector -->
+  <div class="devtabs">
+    <div class="devtab active" data-dev="edge" onclick="setDevice('edge')">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="32" fill="#2988c9"/>
+        <g stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round">
+          <rect x="15" y="24.5" width="34" height="15" stroke-width="3"/>
+          <line x1="22" y1="24.5" x2="19" y2="17"/><circle cx="18" cy="15" r="2.4" fill="#2988c9"/>
+          <line x1="32" y1="24.5" x2="32" y2="16"/><circle cx="32" cy="13.6" r="2.4" fill="#2988c9"/>
+          <line x1="42" y1="24.5" x2="45" y2="17"/><circle cx="46" cy="15" r="2.4" fill="#2988c9"/>
+          <line x1="22" y1="39.5" x2="19" y2="47"/><circle cx="18" cy="49" r="2.4" fill="#2988c9"/>
+          <line x1="32" y1="39.5" x2="32" y2="48"/><circle cx="32" cy="50.4" r="2.4" fill="#2988c9"/>
+          <line x1="42" y1="39.5" x2="45" y2="47"/><circle cx="46" cy="49" r="2.4" fill="#2988c9"/>
+          <path d="M39 34.5 a2.2 2.2 0 0 1 0 -4.4 a3 3 0 0 1 5.6 -0.6 a2.5 2.5 0 0 1 0.4 5 z" fill="#fff" stroke="none"/>
+        </g>
+      </svg>
+      <div><div class="t">Virtual Edge</div><div class="s">KVM / ESXi Edge VM</div></div>
+    </div>
+    <div class="devtab" data-dev="gateway" onclick="setDevice('gateway')">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="32" fill="#2988c9"/>
+        <g stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 34 a8 8 0 0 1 1.5 -15.8 a11 11 0 0 1 21 -2.2 a9 9 0 0 1 5.5 16.5"/>
+          <circle cx="32" cy="38" r="10.5"/>
+          <path d="M26.5 38 h11 M29.5 34.5 L26 38 l3.5 3.5 M34.5 34.5 L38 38 l-3.5 3.5"/>
+        </g>
+      </svg>
+      <div><div class="t">Partner Gateway</div><div class="s">1-arm or 2-arm deployment</div></div>
+    </div>
+    <div class="devtab" data-dev="vco" onclick="setDevice('vco')">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="32" fill="#2988c9"/>
+        <g stroke="#fff" stroke-width="2.8" fill="none" stroke-linecap="round">
+          <rect x="16" y="18" width="32" height="22" rx="2"/>
+          <line x1="26" y1="46" x2="38" y2="46"/><line x1="32" y1="40" x2="32" y2="46"/>
+          <circle cx="26" cy="30" r="5.5"/><path d="M26 24.5 v5.5 l4 3.5" stroke-width="2.2"/>
+          <line x1="36" y1="25" x2="44" y2="25"/><circle cx="38" cy="25" r="1.8" fill="#fff"/>
+          <line x1="36" y1="33" x2="44" y2="33"/><circle cx="42" cy="33" r="1.8" fill="#fff"/>
+        </g>
+      </svg>
+      <div><div class="t">Orchestrator (VCO)</div><div class="s">Management plane VM</div></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- ================= FORMS ================= -->
+    <div class="card" id="formcard">
+
+      <!-- ========== EDGE ========== -->
+      <div class="devform" id="form-edge">
+        <h2>Virtual Edge configuration</h2>
+        <h3>Identity</h3>
+        <div class="row">
+          <div><label>Instance ID</label><input type="text" id="e_instance" value="vedge1" spellcheck="false"></div>
+          <div><label>Hostname</label><input type="text" id="e_hostname" value="vedge1" spellcheck="false"></div>
+        </div>
+
+        <h3>Orchestrator</h3>
+        <div class="row">
+          <div><label>Orchestrator (VCO) address</label><input type="text" id="e_vco" placeholder="vco.example.com or IP" spellcheck="false"></div>
+          <div><label>Activation code</label><input type="text" id="e_code" placeholder="XXXX-XXXX-XXXX" spellcheck="false"></div>
+        </div>
+        <div class="check"><input type="checkbox" id="e_ignorecert" checked><span>Ignore certificate errors (<code>vco_ignore_cert_errors</code>)</span></div>
+
+        <h3>Console access</h3>
+        <label>Console password</label>
+        <input type="text" id="e_password" placeholder="required — Edge image has no default password" spellcheck="false">
+        <div class="check"><input type="checkbox" id="e_sshpw" checked><span>Allow SSH password login (<code>ssh_pwauth</code>)</span></div>
+
+        <h3>WAN interfaces <span class="opt" style="font-weight:400;text-transform:none">(optional — DHCP on all interfaces if empty)</span></h3>
+        <div id="e_ifaces"></div>
+        <button class="btn-add" onclick="edgeAddIface()">+ Add interface</button>
+        <div class="hint">Interface names follow the Edge model, e.g. GE1, GE2, GE3… MAC address ties the config to the right vNIC.</div>
+      </div>
+
+      <!-- ========== GATEWAY ========== -->
+      <div class="devform" id="form-gateway" style="display:none">
+        <h2>Partner Gateway configuration</h2>
+        <h3>Identity</h3>
+        <label>Hostname</label><input type="text" id="g_hostname" value="vcg01" spellcheck="false">
+
+        <h3>Deployment</h3>
+        <div class="armsel">
+          <div class="armopt active" id="g_arm1sel" onclick="setArm(1)"><div class="t">1-arm</div><div class="s">eth0 only — internet &amp; handoff on one interface</div></div>
+          <div class="armopt" id="g_arm2sel" onclick="setArm(2)"><div class="t">2-arm</div><div class="s">eth0 internet-facing + eth1 handoff (VRF)</div></div>
+        </div>
+
+        <h3>eth0 — internet facing</h3>
+        <label>Addressing</label>
+        <select id="g_e0mode" onchange="regen()"><option value="dhcp">DHCP</option><option value="static">Static</option></select>
+        <div id="g_e0static" style="display:none">
+          <div class="row">
+            <div><label>Address (CIDR)</label><input type="text" id="g_e0addr" placeholder="203.0.113.10/24" spellcheck="false"></div>
+            <div><label>Default gateway</label><input type="text" id="g_e0gw" placeholder="203.0.113.1" spellcheck="false"></div>
+          </div>
+          <div class="row">
+            <div><label>DNS primary</label><input type="text" id="g_e0dns1" placeholder="8.8.8.8" spellcheck="false"></div>
+            <div><label>DNS secondary <span class="opt">(optional)</span></label><input type="text" id="g_e0dns2" placeholder="8.8.4.4" spellcheck="false"></div>
+          </div>
+          <div class="hint">Route metric 1 — eth0 is the primary default route.</div>
+        </div>
+
+        <div id="g_eth1block" style="display:none">
+          <h3>eth1 — handoff / VRF</h3>
+          <label>Addressing</label>
+          <select id="g_e1mode" onchange="regen()"><option value="static">Static</option><option value="dhcp">DHCP</option></select>
+          <div id="g_e1static">
+            <div class="row">
+              <div><label>Address (CIDR)</label><input type="text" id="g_e1addr" placeholder="192.168.152.10/24" spellcheck="false"></div>
+              <div><label>Gateway <span class="opt">(optional)</span></label><input type="text" id="g_e1gw" placeholder="192.168.152.1" spellcheck="false"></div>
+            </div>
+            <div class="row">
+              <div><label>DNS primary <span class="opt">(optional)</span></label><input type="text" id="g_e1dns1" spellcheck="false"></div>
+              <div><label>DNS secondary <span class="opt">(optional)</span></label><input type="text" id="g_e1dns2" spellcheck="false"></div>
+            </div>
+            <div class="hint">Route metric 13 — backup default route via the handoff network.</div>
+          </div>
+        </div>
+
+        <h3>Orchestrator</h3>
+        <div class="row">
+          <div><label>Orchestrator (VCO) address</label><input type="text" id="g_vco" placeholder="vco.example.com or IP" spellcheck="false"></div>
+          <div><label>Activation code</label><input type="text" id="g_code" placeholder="XXXX-XXXX-XXXX" spellcheck="false"></div>
+        </div>
+        <div class="check"><input type="checkbox" id="g_ignorecert"><span>Ignore certificate errors (<code>vco_ignore_cert_errors</code>)</span></div>
+
+        <h3>Console access <span class="opt" style="text-transform:none;font-weight:400">(user: vcadmin)</span></h3>
+        <label>Console password</label><input type="text" id="g_password" placeholder="password for vcadmin" spellcheck="false">
+        <label>SSH public keys <span class="opt">(one per line, optional)</span></label>
+        <textarea id="g_sshkeys" rows="3" placeholder="ssh-rsa AAAA... user@host" spellcheck="false"></textarea>
+      </div>
+
+      <!-- ========== VCO ========== -->
+      <div class="devform" id="form-vco" style="display:none">
+        <h2>Orchestrator (VCO) configuration</h2>
+        <h3>Identity</h3>
+        <div class="row">
+          <div><label>Instance ID</label><input type="text" id="v_instance" value="vco01" spellcheck="false"></div>
+          <div><label>Hostname</label><input type="text" id="v_hostname" value="vco-01" spellcheck="false"></div>
+        </div>
+
+        <h3>Network (eth0)</h3>
+        <label>Addressing</label>
+        <select id="v_mode" onchange="regen()"><option value="dhcp">DHCP</option><option value="static">Static</option></select>
+        <div id="v_static" style="display:none">
+          <div class="row">
+            <div><label>IP address</label><input type="text" id="v_addr" placeholder="10.0.1.2" spellcheck="false"></div>
+            <div><label>Netmask</label><input type="text" id="v_mask" placeholder="255.255.255.0" spellcheck="false"></div>
+          </div>
+          <div class="row">
+            <div><label>Gateway</label><input type="text" id="v_gw" placeholder="10.0.1.1" spellcheck="false"></div>
+            <div><label>&nbsp;</label><div class="hint" id="v_netcalc" style="margin-top:10px"></div></div>
+          </div>
+        </div>
+
+        <h3>Console access <span class="opt" style="text-transform:none;font-weight:400">(user: vcadmin)</span></h3>
+        <label>Console password</label><input type="text" id="v_password" placeholder="password for vcadmin" spellcheck="false">
+        <label>SSH public keys <span class="opt">(one per line, optional)</span></label>
+        <textarea id="v_sshkeys" rows="3" placeholder="ssh-rsa AAAA... user@host" spellcheck="false"></textarea>
+
+        <h3>Orchestrator services</h3>
+        <label>Super user accounts <span class="opt">(email:password, one per line, optional)</span></label>
+        <textarea id="v_superusers" rows="2" placeholder="admin@example.com:ChangeMe123" spellcheck="false"></textarea>
+        <div class="check"><input type="checkbox" id="v_removedefault" checked><span>Remove default users (<code>remove_default_users</code>)</span></div>
+        <label>System properties <span class="opt">(key:value, one per line, optional)</span></label>
+        <textarea id="v_sysprops" rows="3" placeholder="network.public.address:vco.example.com&#10;mail.smtp.host:smtp.example.com" spellcheck="false"></textarea>
+
+        <h3>SSL certificate <span class="opt" style="text-transform:none;font-weight:400">(optional — replaces self-signed cert)</span></h3>
+        <label>Server certificate (PEM)</label>
+        <textarea id="v_crt" rows="3" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" spellcheck="false"></textarea>
+        <label>Server private key (PEM, unencrypted)</label>
+        <textarea id="v_key" rows="3" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----" spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <!-- ================= OUTPUT ================= -->
+    <div class="card">
+      <h2 style="margin-bottom:12px">Generated files</h2>
+      <div class="filetabs" id="filetabs"></div>
+      <pre class="preview" id="preview"></pre>
+      <div class="valbox" id="valbox"></div>
+      <div class="warnbox" id="warnbox"></div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="downloadIso()">⬇ Download ISO</button>
+        <button class="btn btn-ghost" onclick="downloadFiles()">Download files</button>
+        <button class="btn btn-ghost" onclick="copyCurrent()">Copy current file</button>
+      </div>
+      <details class="cmd">
+        <summary>Equivalent manual command (genisoimage / mkisofs)</summary>
+        <code id="cmdline"></code>
+      </details>
+      <details class="cmd">
+        <summary>Validate on a Linux box (optional)</summary>
+        <code>cloud-init schema --config-file user-data
+cloud-init schema --schema-type network-config --config-file network-config</code>
+        <div class="hint" style="margin-top:6px">
+          Note: upstream cloud-init doesn't know the VeloCloud vendor sections, so it reports
+          <i>"Additional properties are not allowed ('velocloud'/'vco' was unexpected)"</i> — that one error is expected
+          and harmless; the VeloCloud image's own cloud-init consumes those keys. Everything else should pass.
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <footer>
+    Built from the Arista / VeloCloud 6.4 deployment guides:
+    <a href="https://www.arista.com/en/admin-guide-vc-6-4/sd-wan-6-4-virtual-edge-deployment" target="_blank" rel="noopener">Virtual Edge</a> ·
+    <a href="https://www.arista.com/en/partner-guide-vc-6-4/sd-wan-6-4-install-partner-gateway" target="_blank" rel="noopener">Partner Gateway</a> ·
+    <a href="https://www.arista.com/en/orchestrator-guide-vc-6-4/sd-wan-6-4-velocloud-orchestrator-deployment-and-monitoring-guide" target="_blank" rel="noopener">Orchestrator</a><br>
+    The ISO is generated locally in your browser (ISO 9660 + Joliet, volume id <code>cidata</code>) — equivalent to
+    <code>genisoimage -volid cidata -joliet -rock …</code>. Attach it to the VM as a CD-ROM at first boot.
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script src="iso9660.js"></script>
+<script>
+'use strict';
+
+let device = 'edge';
+let currentFiles = [];   // [{name, content}]
+let activeFile = 0;
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const val = id => $(id).value.trim();
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+function yq(v) {                       // YAML single-quoted scalar
+  return "'" + String(v).replace(/'/g, "''") + "'";
+}
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+function ipToInt(ip) {
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some(n => isNaN(n) || n < 0 || n > 255)) return null;
+  return ((p[0]<<24)>>>0) + (p[1]<<16) + (p[2]<<8) + p[3];
+}
+function intToIp(n) {
+  return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join('.');
+}
+
+/* ---------- device switching ---------- */
+function setDevice(dev) {
+  device = dev;
+  document.querySelectorAll('.devtab').forEach(el => el.classList.toggle('active', el.dataset.dev === dev));
+  document.querySelectorAll('.devform').forEach(el => el.style.display = 'none');
+  $('form-' + dev).style.display = '';
+  activeFile = 0;
+  regen();
+}
+
+/* ---------- gateway arm ---------- */
+let arm = 1;
+function setArm(n) {
+  arm = n;
+  $('g_arm1sel').classList.toggle('active', n === 1);
+  $('g_arm2sel').classList.toggle('active', n === 2);
+  $('g_eth1block').style.display = n === 2 ? '' : 'none';
+  regen();
+}
+
+/* ---------- edge dynamic interfaces ---------- */
+let edgeIfCount = 0;
+function edgeAddIface(name) {
+  edgeIfCount++;
+  const div = document.createElement('div');
+  div.className = 'ifrow';
+  div.innerHTML =
+    '<div class="head">' +
+      '<input type="text" class="ifname" value="' + (name || 'GE' + edgeIfCount) + '" spellcheck="false">' +
+      '<select class="ifmode" onchange="edgeModeToggle(this)"><option value="dhcp">DHCP</option><option value="static">Static</option></select>' +
+      '<input type="text" class="ifmac" placeholder="MAC (optional) 52:54:00:..." style="flex:1" spellcheck="false">' +
+      '<button class="del" title="Remove" onclick="this.closest(\'.ifrow\').remove(); regen()">✕</button>' +
+    '</div>' +
+    '<div class="static" style="display:none">' +
+      '<input type="text" class="ifip" placeholder="IP address" spellcheck="false">' +
+      '<input type="text" class="ifmask" placeholder="Netmask" spellcheck="false">' +
+      '<input type="text" class="ifgw" placeholder="Gateway" spellcheck="false">' +
+    '</div>';
+  $('e_ifaces').appendChild(div);
+  div.querySelectorAll('input,select').forEach(el => el.addEventListener('input', regen));
+  regen();
+}
+function edgeModeToggle(sel) {
+  sel.closest('.ifrow').querySelector('.static').style.display = sel.value === 'static' ? '' : 'none';
+  regen();
+}
+
+/* ---------- generators ---------- */
+function genEdge() {
+  const warns = [];
+  const inst = val('e_instance') || 'vedge1';
+  const host = val('e_hostname') || inst;
+  const vco = val('e_vco'), code = val('e_code'), pw = val('e_password');
+  if (!vco) warns.push('Orchestrator address is empty.');
+  if (!code) warns.push('Activation code is empty — the Edge will not auto-activate.');
+  if (!pw) warns.push('Console password is empty — the Edge image has <b>no default password</b>.');
+
+  let md = 'instance-id: ' + inst + '\nlocal-hostname: ' + host + '\n';
+  const rows = [...document.querySelectorAll('#e_ifaces .ifrow')];
+  const ifLines = [];
+  for (const r of rows) {
+    const name = r.querySelector('.ifname').value.trim();
+    const mode = r.querySelector('.ifmode').value;
+    const mac = r.querySelector('.ifmac').value.trim();
+    if (!name) continue;
+    if (mode === 'static') {
+      const ip = r.querySelector('.ifip').value.trim();
+      const mask = r.querySelector('.ifmask').value.trim();
+      const gw = r.querySelector('.ifgw').value.trim();
+      if (!ip || !mask) { warns.push('Interface ' + esc(name) + ': static mode needs IP and netmask.'); continue; }
+      ifLines.push('      ' + name + ':');
+      ifLines.push('         type: static');
+      ifLines.push('         ipaddr: ' + ip);
+      if (mac) ifLines.push('         mac_address: ' + mac);
+      ifLines.push('         netmask: ' + mask);
+      if (gw) ifLines.push('         gateway: ' + gw);
+    } else if (mac) {
+      ifLines.push('      ' + name + ':');
+      ifLines.push('         mac_address: ' + mac);
+    }
+    // dhcp without MAC adds nothing — DHCP is the default
+  }
+  if (ifLines.length) md += 'network-interfaces:\n' + ifLines.join('\n') + '\n';
+
+  let ud = '#cloud-config\n';
+  if (pw) ud += 'password: ' + yq(pw) + '\nchpasswd: { expire: False }\n';
+  ud += 'ssh_pwauth: ' + ($('e_sshpw').checked ? 'True' : 'False') + '\n';
+  ud += 'velocloud:\n      vce:\n';
+  ud += '            vco: ' + (vco || 'VCO_ADDRESS_HERE') + '\n';
+  ud += '            activation_code: ' + (code || 'ACTIVATION_CODE_HERE') + '\n';
+  ud += '            vco_ignore_cert_errors: ' + ($('e_ignorecert').checked ? 'true' : 'false') + '\n';
+
+  return { files: [ {name:'user-data', content: ud}, {name:'meta-data', content: md} ],
+           isoName: host + '-cidata.iso', warns };
+}
+
+function gwIface(id, metric, indent) {
+  // returns netplan lines for one gateway interface, or null
+  const mode = val(id + 'mode');
+  const p = indent;
+  if (mode === 'dhcp') return [p + 'dhcp4: true'];
+  const addr = val(id + 'addr'), gw = val(id + 'gw');
+  const dns = [val(id + 'dns1'), val(id + 'dns2')].filter(Boolean);
+  if (!addr) return null;
+  const lines = [];
+  lines.push(p + 'addresses:');
+  lines.push(p + '  - ' + addr);
+  if (dns.length) {
+    lines.push(p + 'nameservers:');
+    lines.push(p + '  addresses: [' + dns.join(', ') + ']');
+    lines.push(p + '  search: []');
+  }
+  if (gw) {
+    lines.push(p + 'routes:');
+    lines.push(p + '  - to: 0.0.0.0/0');
+    lines.push(p + '    via: ' + gw);
+    lines.push(p + '    metric: ' + metric);
+  }
+  return lines;
+}
+
+function genGateway() {
+  const warns = [];
+  const host = val('g_hostname') || 'vcg01';
+  const vco = val('g_vco'), code = val('g_code'), pw = val('g_password');
+  const keys = val('g_sshkeys').split('\n').map(s => s.trim()).filter(Boolean);
+  if (!vco) warns.push('Orchestrator address is empty.');
+  if (!code) warns.push('Activation code is empty — the Gateway will not auto-activate.');
+  if (!pw && !keys.length) warns.push('No console password and no SSH key — you will not be able to log in (user: vcadmin).');
+
+  const md = 'instance-id: ' + host + '\nlocal-hostname: ' + host + '\n';
+
+  // toggle static blocks visibility
+  $('g_e0static').style.display = val('g_e0mode') === 'static' ? '' : 'none';
+  if (arm === 2) $('g_e1static').style.display = val('g_e1mode') === 'static' ? '' : 'none';
+
+  let nc = null;
+  const e0 = gwIface('g_e0', 1, '    ');
+  const e1 = arm === 2 ? gwIface('g_e1', 13, '    ') : null;
+  const e0static = val('g_e0mode') === 'static';
+  const e1static = arm === 2 && val('g_e1mode') === 'static';
+  if (e0static && !e0) warns.push('eth0: static mode needs an address in CIDR form (e.g. 203.0.113.10/24).');
+  if (e1static && !e1) warns.push('eth1: static mode needs an address in CIDR form.');
+  if (e0static && e0 && val('g_e0addr').indexOf('/') < 0) warns.push('eth0 address should be CIDR (e.g. 203.0.113.10<b>/24</b>).');
+  if (e1static && e1 && val('g_e1addr').indexOf('/') < 0) warns.push('eth1 address should be CIDR (e.g. 192.168.152.10<b>/24</b>).');
+
+  const anyStatic = e0static || e1static;
+  if (anyStatic) {
+    const lines = ['version: 2', 'ethernets:'];
+    lines.push('  eth0:');
+    lines.push(...(e0 || ['    dhcp4: true']));
+    if (arm === 2) {
+      lines.push('  eth1:');
+      lines.push(...(e1 || ['    dhcp4: true']));
+    }
+    nc = lines.join('\n') + '\n';
+  }
+
+  let ud = '#cloud-config\n';
+  ud += 'hostname: ' + host + '\n';
+  if (pw) ud += 'password: ' + yq(pw) + '\nchpasswd:\n  expire: false\n';
+  ud += 'ssh_pwauth: true\n';
+  if (keys.length) {
+    ud += 'ssh_authorized_keys:\n';
+    for (const k of keys) ud += '  - ' + k + '\n';
+  }
+  ud += 'velocloud:\n  vcg:\n';
+  ud += '    vco: ' + (vco || 'VCO_ADDRESS_HERE') + '\n';
+  ud += '    activation_code: ' + (code || 'ACTIVATION_CODE_HERE') + '\n';
+  ud += '    vco_ignore_cert_errors: ' + ($('g_ignorecert').checked ? 'true' : 'false') + '\n';
+
+  const files = [ {name:'user-data', content: ud}, {name:'meta-data', content: md} ];
+  if (nc) files.push({name:'network-config', content: nc});
+  else warns.push('All interfaces on DHCP — network-config file omitted (cloud-init default).');
+  return { files, isoName: host + '-cidata.iso', warns };
+}
+
+function genVco() {
+  const warns = [];
+  const inst = val('v_instance') || 'vco01';
+  const host = val('v_hostname') || inst;
+  const pw = val('v_password');
+  const keys = val('v_sshkeys').split('\n').map(s => s.trim()).filter(Boolean);
+  if (!pw && !keys.length) warns.push('No console password and no SSH key — you will not be able to log in (user: vcadmin).');
+
+  $('v_static').style.display = val('v_mode') === 'static' ? '' : 'none';
+
+  let md = 'instance-id: ' + inst + '\nlocal-hostname: ' + host + '\n';
+  if (val('v_mode') === 'static') {
+    const ip = val('v_addr'), mask = val('v_mask'), gw = val('v_gw');
+    const ipn = ipToInt(ip), maskn = ipToInt(mask);
+    let network = '', bcast = '';
+    if (ipn !== null && maskn !== null) {
+      network = intToIp((ipn & maskn) >>> 0);
+      bcast = intToIp(((ipn & maskn) | (~maskn >>> 0)) >>> 0);
+      $('v_netcalc').innerHTML = 'network: <b>' + network + '</b> · broadcast: <b>' + bcast + '</b> (computed)';
+    } else {
+      $('v_netcalc').textContent = '';
+    }
+    if (!ip || !mask) {
+      warns.push('Static mode needs IP address and netmask.');
+    } else {
+      md += 'network-interfaces: |\n';
+      md += '  auto eth0\n';
+      md += '  iface eth0 inet static\n';
+      md += '      address ' + ip + '\n';
+      md += '      netmask ' + mask + '\n';
+      if (network) md += '      network ' + network + '\n';
+      if (bcast) md += '      broadcast ' + bcast + '\n';
+      if (gw) md += '      gateway ' + gw + '\n';
+    }
+  }
+
+  let ud = '#cloud-config\n';
+  if (pw) ud += 'password: ' + yq(pw) + '\nchpasswd: {expire: False}\n';
+  ud += 'ssh_pwauth: True\n';
+  if (keys.length) {
+    ud += 'ssh_authorized_keys:\n';
+    for (const k of keys) ud += '  - ' + k + '\n';
+  }
+
+  const su = val('v_superusers').split('\n').map(s => s.trim()).filter(Boolean);
+  const props = val('v_sysprops').split('\n').map(s => s.trim()).filter(Boolean);
+  if (su.length || props.length) {
+    ud += 'vco:\n';
+    if (su.length) {
+      ud += '  super_users:\n    list: |\n';
+      for (const u of su) ud += '      ' + u + '\n';
+      ud += '    remove_default_users: ' + ($('v_removedefault').checked ? 'True' : 'False') + '\n';
+    }
+    if (props.length) {
+      ud += '  system_properties:\n    list: |\n';
+      for (const p of props) ud += '      ' + p + '\n';
+    }
+  }
+
+  const crt = $('v_crt').value.trim(), key = $('v_key').value.trim();
+  if (crt || key) {
+    if (!crt || !key) warns.push('Provide both the certificate and the private key to replace the SSL cert.');
+    ud += 'write_files:\n';
+    const block = (path, perm, pem) => {
+      let s = '  - path: ' + path + '\n    permissions: ' + yq(perm) + '\n    content: |\n';
+      for (const line of pem.split('\n')) s += '      ' + line + '\n';
+      return s;
+    };
+    if (crt) ud += block('/etc/nginx/velocloud/ssl/server.crt', '0644', crt);
+    if (key) ud += block('/etc/nginx/velocloud/ssl/server.key', '0600', key);
+    if (key && /ENCRYPTED/.test(key)) warns.push('The private key looks encrypted — it must be unencrypted or the service fails to start.');
+  }
+
+  return { files: [ {name:'user-data', content: ud}, {name:'meta-data', content: md} ],
+           isoName: inst + '-cidata.iso', warns };
+}
+
+/* ---------- validation ---------- */
+function validateFile(f) {
+  // returns {ok, msg}
+  if (/[‘’“”]/.test(f.content))
+    return { ok: false, msg: 'contains smart quotes (“ ”) — will corrupt the config; retype plain quotes' };
+  let body = f.content;
+  if (f.name === 'user-data') {
+    if (!body.startsWith('#cloud-config'))
+      return { ok: false, msg: 'must start with #cloud-config' };
+    body = body.slice(body.indexOf('\n') + 1);
+  }
+  if (typeof jsyaml === 'undefined')
+    return { ok: true, msg: 'YAML check skipped (js-yaml CDN not loaded)' };
+  let doc;
+  try {
+    doc = jsyaml.load(body);
+  } catch (e) {
+    const line = e.mark ? ' (line ' + (e.mark.line + 1 + (f.name === 'user-data' ? 1 : 0)) + ')' : '';
+    return { ok: false, msg: 'invalid YAML' + line + ': ' + e.reason };
+  }
+  if (f.name === 'network-config') {
+    if (!doc || doc.version !== 2) return { ok: false, msg: 'netplan version: 2 missing' };
+    if (!doc.ethernets) return { ok: false, msg: 'ethernets: section missing' };
+  }
+  if (f.name === 'meta-data' && (!doc || !doc['instance-id']))
+    return { ok: false, msg: 'instance-id missing' };
+  return { ok: true, msg: 'valid YAML' };
+}
+
+/* ---------- render ---------- */
+let isoName = 'seed.iso';
+function regen() {
+  const gen = device === 'edge' ? genEdge() : device === 'gateway' ? genGateway() : genVco();
+  currentFiles = gen.files;
+  isoName = gen.isoName;
+  if (activeFile >= currentFiles.length) activeFile = 0;
+
+  const tabs = $('filetabs');
+  tabs.innerHTML = '';
+  currentFiles.forEach((f, i) => {
+    const b = document.createElement('button');
+    b.className = 'filetab' + (i === activeFile ? ' active' : '');
+    b.textContent = f.name;
+    b.onclick = () => { activeFile = i; regen(); };
+    tabs.appendChild(b);
+  });
+  $('preview').textContent = currentFiles[activeFile].content;
+
+  const vb = $('valbox');
+  vb.innerHTML = '';
+  for (const f of currentFiles) {
+    const r = validateFile(f);
+    const div = document.createElement('div');
+    div.className = 'v';
+    div.innerHTML = '<span class="name">' + f.name + '</span>' +
+      (r.ok ? '<span class="ok">✓ ' : '<span class="err">✗ ') + esc(r.msg) + '</span>';
+    vb.appendChild(div);
+  }
+
+  const wb = $('warnbox');
+  if (gen.warns.length) {
+    wb.style.display = '';
+    wb.innerHTML = '⚠ ' + gen.warns.join('<br>⚠ ');
+  } else wb.style.display = 'none';
+
+  $('cmdline').textContent =
+    'genisoimage -output ' + isoName + ' -volid cidata -joliet -rock ' +
+    currentFiles.map(f => f.name).join(' ') +
+    '\n# macOS:\nmkisofs -output ' + isoName + ' -volid cidata -joliet -rock {' +
+    currentFiles.map(f => f.name).join(',') + '}';
+}
+
+/* ---------- downloads ---------- */
+function saveBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function downloadIso() {
+  try {
+    const iso = ISO9660.build(currentFiles, 'cidata');
+    saveBlob(new Blob([iso], {type: 'application/x-iso9660-image'}), isoName);
+    toast(isoName + ' downloaded');
+  } catch (e) {
+    toast('ISO build failed: ' + e.message);
+  }
+}
+function downloadFiles() {
+  currentFiles.forEach(f => saveBlob(new Blob([f.content], {type: 'text/plain'}), f.name));
+  toast(currentFiles.length + ' files downloaded');
+}
+function copyCurrent() {
+  navigator.clipboard.writeText(currentFiles[activeFile].content)
+    .then(() => toast(currentFiles[activeFile].name + ' copied'));
+}
+
+/* ---------- init ---------- */
+document.querySelectorAll('input, textarea, select').forEach(el => el.addEventListener('input', regen));
+edgeAddIface('GE1');
+edgeAddIface('GE2');
+setArm(2);
+setDevice('edge');
+</script>
+</body>
+</html>
