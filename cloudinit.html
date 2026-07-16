@@ -337,7 +337,7 @@
         <h3>Run commands <span class="opt" style="text-transform:none;font-weight:400">(optional)</span></h3>
         <label>Extra commands <span class="opt">(one per line, appended to <code>runcmd</code>)</span></label>
         <textarea id="v_runcmd" rows="2" placeholder="echo done" spellcheck="false"></textarea>
-        <div class="hint">Included by default: waits for vcadmin to exist, then <code>chage -M -1 vcadmin</code> (password never expires).</div>
+        <div class="hint">Included by default: waits for vcadmin to exist, then <code>sudo chage -M -1 vcadmin</code> (password never expires).</div>
 
         <h3>SSL certificate <span class="opt" style="text-transform:none;font-weight:400">(optional — replaces self-signed cert)</span></h3>
         <label>Server certificate (PEM)</label>
@@ -667,7 +667,7 @@ function genVco() {
   ud += '    while ! id "vcadmin" >/dev/null 2>&1; do\n';
   ud += '      sleep 2\n';
   ud += '    done\n';
-  ud += '    chage -M -1 vcadmin\n';
+  ud += '    sudo chage -M -1 vcadmin\n';
   ud += '    ) &\n';
   for (const c of val('v_runcmd').split('\n').map(s => s.trim()).filter(Boolean))
     ud += '  - ' + c + '\n';
