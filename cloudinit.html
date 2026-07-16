@@ -335,8 +335,9 @@
         <textarea id="v_sysprops" rows="3" placeholder="network.public.address:vco.example.com&#10;mail.smtp.host:smtp.example.com" spellcheck="false"></textarea>
 
         <h3>Run commands <span class="opt" style="text-transform:none;font-weight:400">(optional)</span></h3>
-        <label>Commands <span class="opt">(one per line, run at every boot via <code>bootcmd</code>)</span></label>
-        <textarea id="v_runcmd" rows="2" placeholder="chage -M -1 vcadmin" spellcheck="false"></textarea>
+        <label>Extra commands <span class="opt">(one per line, appended to <code>runcmd</code>)</span></label>
+        <textarea id="v_runcmd" rows="2" placeholder="echo done" spellcheck="false"></textarea>
+        <div class="hint">Included by default: waits for vcadmin to exist, then <code>chage -M -1 vcadmin</code> (password never expires).</div>
 
         <h3>SSL certificate <span class="opt" style="text-transform:none;font-weight:400">(optional — replaces self-signed cert)</span></h3>
         <label>Server certificate (PEM)</label>
@@ -659,7 +660,17 @@ function genVco() {
     }
   }
 
-  ud += runcmdBlock('v_runcmd', 'bootcmd');
+  // default runcmd: wait for vcadmin to exist, then disable password expiry
+  ud += 'runcmd:\n';
+  ud += '  - |\n';
+  ud += '    (\n';
+  ud += '    while ! id "vcadmin" >/dev/null 2>&1; do\n';
+  ud += '      sleep 2\n';
+  ud += '    done\n';
+  ud += '    chage -M -1 vcadmin\n';
+  ud += '    ) &\n';
+  for (const c of val('v_runcmd').split('\n').map(s => s.trim()).filter(Boolean))
+    ud += '  - ' + c + '\n';
 
   const crt = $('v_crt').value.trim(), key = $('v_key').value.trim();
   if (crt || key) {
