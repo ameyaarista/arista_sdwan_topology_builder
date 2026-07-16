@@ -335,7 +335,7 @@
         <textarea id="v_sysprops" rows="3" placeholder="network.public.address:vco.example.com&#10;mail.smtp.host:smtp.example.com" spellcheck="false"></textarea>
 
         <h3>Run commands <span class="opt" style="text-transform:none;font-weight:400">(optional)</span></h3>
-        <label>Commands <span class="opt">(one per line, run at first boot via <code>runcmd</code>)</span></label>
+        <label>Commands <span class="opt">(one per line, run at every boot via <code>bootcmd</code>)</span></label>
         <textarea id="v_runcmd" rows="2" placeholder="chage -M -1 vcadmin" spellcheck="false"></textarea>
 
         <h3>SSL certificate <span class="opt" style="text-transform:none;font-weight:400">(optional — replaces self-signed cert)</span></h3>
@@ -392,10 +392,10 @@ function toast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 1800);
 }
-function runcmdBlock(id) {                // YAML runcmd: section from a one-command-per-line textarea
+function runcmdBlock(id, key = 'runcmd') { // YAML runcmd:/bootcmd: section from a one-command-per-line textarea
   const cmds = val(id).split('\n').map(s => s.trim()).filter(Boolean);
   if (!cmds.length) return '';
-  let s = 'runcmd:\n';
+  let s = key + ':\n';
   for (const c of cmds) s += '  - ' + c + '\n';
   return s;
 }
@@ -659,7 +659,7 @@ function genVco() {
     }
   }
 
-  ud += runcmdBlock('v_runcmd');
+  ud += runcmdBlock('v_runcmd', 'bootcmd');
 
   const crt = $('v_crt').value.trim(), key = $('v_key').value.trim();
   if (crt || key) {
